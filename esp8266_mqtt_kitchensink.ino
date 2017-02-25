@@ -28,15 +28,15 @@
 #include "ESP8266httpUpdate.h"
 #include "FS.h"
 
-#include "devices.h"
-#include "mqtt.h"
-#include "ipv4_helpers.h"
-#include "secrets.h"
-#include "mdns_actions.h"
-#include "host_attributes.h"
-#include "config.h"
-#include "http_server.h"
-#include "serve_files.h"
+#include "src/devices.h"
+#include "src/mqtt.h"
+#include "src/ipv4_helpers.h"
+#include "src/secrets.h"
+#include "src/mdns_actions.h"
+#include "src/host_attributes.h"
+#include "src/config.h"
+#include "src/http_server.h"
+#include "src/serve_files.h"
 
 
 Config config = {
