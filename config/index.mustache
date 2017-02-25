@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <head>
+    <link rel="stylesheet" href="style.css">
+    <script src=""></script>
+  </head>
+  <body>
+    <dl>
+      <dt>MAC address</dt><dd>{{host.mac}}</dd>
+      <dt>Hostname</dt><dd>{{config.hostname}}</dd>
+      <dt>Active IP address</dt><dd>{{host.ip}}</dd>
+      <dt>Configured IP address</dt><dd>{{config.ip}}</dd>
+      
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+      
+      <dt>WiFI RSSI</dt><dd>{{host.rssi}}</dd>
+
+      {{#host.ssids}} 
+        <dt>WiFi SSID</dt><dd>{{name}}&nbsp&nbsp&nbsp({{signal}})</dd>
+      {{/host.ssids}}
+      {{^host.ssids}}
+        <dt>WiFi SSID</dt><dd>No WiFI networks found.</dd>
+      {{/host.ssids}}
+      
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+
+      <dt>CPU frequency</dt><dd>{{host.cpu_freqency}}</dd>
+      <dt>Flash size</dt><dd>{{host.flash_size}}</dd>
+      <dt>Flash space</dt><dd>{{host.flash_space}} / {{host.flash_size}}&nbsp;&nbsp;({{host.flash_ratio}}%)</dd>
+      <dt>Flash speed</dt><dd>{{host.flash_speed}}</dd>
+      <dt>Free memory</dt><dd>{{host.free_memory}}</dd>
+      <dt>SDK version</dt><dd>{{host.sdk_version}}</dd>
+      <dt>Core version</dt><dd>{{host.core_version}}</dd>
+
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+      
+      <dt>Analogue in</dt><dd>{{io.analogue_in}}</dd>
+      <dt>Uptime</dt><dd>{{host.uptime}} seconds</dd>
+
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+      
+      <dt>Brokers</dt><dd>
+        <table>
+          <tr class="">
+            <th></th><th>service_name</th><th>port</th><th>hostname</th><th>ip</th><th>service valid until</th><th>host valid until</th><th>ipv4 valid until</th><th>success rate</th>
+          </tr>
+          <tr class="highlight">
+            <td>active</td><td>##manually_added##</td><td>1883</td><td>broker_hint</td><td>192.168.192.9</td><td>0</td><td>0</td><td>0</td><td>1 / 1</td>
+          </tr>
+          <tr class="">
+            <td></td><td>Mosquitto MQTT server on dir505._mqtt._tcp.local</td><td>1883</td><td>dir505.local</td><td>192.168.192.10</td><td>12931</td><td>8548</td><td>8548</td><td>0 / 0</td>
+          </tr>
+          <tr class="">
+            <td></td><td>Mosquitto MQTT server on twinkle._mqtt._tcp.local</td><td>1883</td><td>twinkle.local</td><td>192.168.192.9</td><td>12931</td><td>8548</td><td>8548</td><td>0 / 0</td>
+          </tr>
+        </table>
+      </dd>
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+
+      <dt>mDNS decode success rate</dt><dd>{{TODO}} / {{TODO}}&nbsp&nbsp&nbsp{{TODO}}%</dd>
+      <dt>Largest mDNS packet size</dt><dd>{{TODO}} / {{host.buffer_size}} bytes</dd>
+      <dt>&nbsp</dt><dd>&nbsp</dd>
+      <dt>Configure</dt><dd><a href="configure">go</a></dd>
+    </dl>
+  </body>
+</html>

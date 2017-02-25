@@ -117,32 +117,45 @@ void HttpServer::onFileOperations(const String& _filename){
       }
     } else {
       // Display file in esp8266 flash.
-      String mime;
-      if(!readFile(filename, mime)){
+      if(!readFile(filename)){
         esp8266_http_server.send(404, "text/plain", buffer);
         return;
       }
-      esp8266_http_server.send(200, mime, buffer);
+      if(esp8266_http_server.hasArg("raw") and
+          esp8266_http_server.arg("raw") == "true"){
+        esp8266_http_server.send(200, "text/plain", buffer);
+      } else {
+        if(filename.endsWith(".mustache")){
+          mustacheCompile(buffer);
+        }
+        esp8266_http_server.send(200, mime(filename), buffer);
+      }
       return;
     }
   } else {
-    bool result = SPIFFS.begin();
-    Dir dir = SPIFFS.openDir("/");
-    while(dir.next()){
-      String filename = dir.fileName();
-      filename.remove(0, 1);
-      
-      File file = dir.openFile("r");
-      String size(file.size());
-      file.close();
-      
-      bufferAppend(link(filename, "get?filename=" + filename) + "\t" + size + "\n");
-    }
-    esp8266_http_server.send(200, "text/html", buffer);
+    // Filename not specified.
+    fileBrowser();
     return;
   }
 
   esp8266_http_server.send(200, "text/plain", buffer);
+}
+
+void HttpServer::fileBrowser(){
+  bool result = SPIFFS.begin();
+  Dir dir = SPIFFS.openDir("/");
+  while(dir.next()){
+    String filename = dir.fileName();
+    filename.remove(0, 1);
+
+    File file = dir.openFile("r");
+    String size(file.size());
+    file.close();
+
+    bufferAppend(link(filename, "get?filename=" + filename) + "\t" + size + "\n");
+  }
+  esp8266_http_server.send(200, "text/html", buffer);
+  return;
 }
 
 void HttpServer::onRoot(){
@@ -236,7 +249,7 @@ void HttpServer::onRoot(){
   esp8266_http_server.send((sucess ? 200 : 500), "text/html", buffer);
 }
 
-bool HttpServer::readFile(const String& filename, String& mime){
+bool HttpServer::readFile(const String& filename){
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
@@ -263,16 +276,22 @@ bool HttpServer::readFile(const String& filename, String& mime){
 
 	file.close();
 
-  mime = "text/plain";
-  if(filename.endsWith(".css")){
-    mime = "text/css";
-  } else if(filename.endsWith(".js")){
-    mime = "application/javascript";
-  } else {
-    mime = "text/plain";
-  }
 
   return true;
+}
+
+const String HttpServer::mime(const String& filename){
+  if(filename.endsWith(".css")){
+    return "text/css";
+  } else if(filename.endsWith(".js")){
+    return "application/javascript";
+  } else if(filename.endsWith(".htm") ||
+            filename.endsWith(".html") ||
+            filename.endsWith(".mustache"))
+  {
+    return "text/html";
+  }
+  return "text/plain";
 }
 
 void HttpServer::onConfig(){
@@ -613,3 +632,133 @@ bool HttpServer::bufferInsert(const char* to_insert){
   return false;
 }
 
+void HttpServer::mustacheCompile(char* buffer){
+  Serial.println("mustacheCompile");
+  int position = 0;
+  char line[255] = "";
+  while(position <= strnlen(buffer, buffer_size)){
+    char* end_line = strchr(buffer + position +1, 13);  // Look for newline.
+    if(!end_line){
+      Serial.println("no eol");
+      break;
+    }
+    char* cr = strchr(line, '\r');  // Remove carriage-returns from windows machines.
+    if(cr){
+      cr = '\0';
+    }
+    int end_position = end_line - buffer;
+    strncpy(line, buffer + position, end_position - position);
+    line[end_position - position] = '\0';
+
+    Serial.println(line);
+    char* tmp_buffer = buffer + position;
+    bool found = false;
+
+    do {
+      found = false;
+      char tag[64] = "";
+      char tag_content[128] = "";
+      tmp_buffer = parseTag(tmp_buffer, end_line - tmp_buffer, tag);
+      if(replaceTag(tmp_buffer, tag, tag_content)){
+
+        int tag_len_diff = strlen(tag_content) - strlen(tag) - strlen("{{}}");
+        char* buffer_remainder = tmp_buffer + strlen(tag) +4;
+        // TODO: Make sure we can't go over BUFFER_SIZE.
+        memmove(buffer_remainder + tag_len_diff,
+                buffer_remainder,
+                buffer + BUFFER_SIZE - buffer_remainder);
+        *(buffer + strlen(buffer) + tag_len_diff) = '\0';
+        memmove(tmp_buffer, tag_content, strlen(tag_content));
+
+      }
+      if(tmp_buffer) {
+        found = true;
+      }
+      tmp_buffer += 2;
+    } while(found);
+    
+    position = end_position;
+  }
+}
+
+char* HttpServer::parseTag(char* buffer, int line_len, char* tag){
+  if(findPatternInLine(buffer, "{{#", line_len)){
+      return NULL;
+  } else if(findPatternInLine(buffer, "{{^", line_len)){
+      return NULL;
+  } else if(findPatternInLine(buffer, "{{/", line_len)){
+      return NULL;
+  } else if(findPatternInLine(buffer, "{{", line_len)){
+    if(findPatternInLine(buffer, "}}", line_len)){
+      strncpy(tag, findPatternInLine(buffer, "{{", line_len) +2, 64);
+      char* end_pattern = findPatternInLine(tag, "}}", 64);
+      if(end_pattern){
+        *end_pattern = '\0';
+      } else {
+        // empty string.
+        tag[0] = '\0';
+      }
+      Serial.println(tag);
+      return findPatternInLine(buffer, "{{", line_len);
+    }
+  }
+
+  return NULL;
+}
+
+bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content){
+  if(strcmp(tag, "host.mac") == 0){
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    String mac_str = macToStr(mac);
+    mac_str.toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "config.hostname") == 0){
+    strncpy(tag_content, config->hostname, HOSTNAME_LEN);
+  } else if(strcmp(tag, "host.ip") == 0){
+    ip_to_string(WiFi.localIP()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "config.ip") == 0){
+    ip_to_string(config->ip).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.rssi") == 0){
+    String(WiFi.RSSI()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.cpu_freqency") == 0){
+    String(ESP.getCpuFreqMHz()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.flash_size") == 0){
+    String(ESP.getFlashChipSize()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.flash_space") == 0){
+    String(ESP.getFreeSketchSpace()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.flash_ratio") == 0){
+    String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
+      .toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.flash_speed") == 0){
+    String(ESP.getFlashChipSpeed()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.free_memory") == 0){
+    String(ESP.getFreeHeap()).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.sdk_version") == 0){
+    strncpy(tag_content, ESP.getSdkVersion(), 128);
+  } else if(strcmp(tag, "host.core_version") == 0){
+    ESP.getCoreVersion().toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "io.analogue_in") == 0){
+    String(analogRead(A0)).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.uptime") == 0){
+    String(millis() / 1000).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "host.buffer_size") == 0){
+    //String(BUFFER_SIZE).toCharArray(tag_content, 128);
+  } else if(strcmp(tag, "") == 0){
+  } else if(strcmp(tag, "TODO") == 0){
+    strncpy(tag_content, "XX", 128);
+  }
+
+  if(strlen(tag_content)){
+    return true;
+  }  
+  return false;
+}
+
+char* HttpServer::findPatternInLine(char* buffer, const char* pattern, int line_len) const{
+  for(int i = 0; i < line_len; i++){
+    if(strncmp (buffer + i, pattern, strlen(pattern)) == 0){
+      return buffer +i;
+    }
+  }
+  return NULL;
+}

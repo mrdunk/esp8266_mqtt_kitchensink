@@ -42,11 +42,13 @@ class HttpServer{
   void onTest();
   void handleNotFound();
   void onFileOperations(const String& _filename = "");
+  void fileBrowser();
   void onRoot();
+  const String mime(const String& filename);
   void onConfig();
   void onSet();
   void onReset();
-  bool readFile(const String& filename, String& mime);
+  bool readFile(const String& filename);
   char* buffer;
   const int buffer_size;
   Config* config;
@@ -60,6 +62,11 @@ class HttpServer{
   bool bufferAppend(const char* to_add);
   bool bufferInsert(const String& to_insert);
   bool bufferInsert(const char* to_insert);
+
+  void mustacheCompile(char* buffer);
+  char* parseTag(char* line, int line_length, char* tag);
+  char* findPatternInLine(char* buffer, const char* pattern, int line_len) const;
+  bool replaceTag(char* tag_position, const char* tag, char* tag_content);
 };
 
 
