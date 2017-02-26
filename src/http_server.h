@@ -26,6 +26,14 @@
 #include "host_attributes.h"
 #include "mdns_actions.h"
 
+enum tagType{
+  tagPlain,
+  tagList,
+  tagInverted,
+  tagEnd
+};
+
+
 class HttpServer{
  public:
   HttpServer(char* _buffer, 
@@ -64,10 +72,31 @@ class HttpServer{
   bool bufferInsert(const char* to_insert);
 
   void mustacheCompile(char* buffer);
-  char* parseTag(char* line, int line_length, char* tag);
-  char* findPatternInLine(char* buffer, const char* pattern, int line_len) const;
+
+  /* Search through buffer for a {{tag}} for line_len characters.
+   * Returns: Pointer in buffer to end of first matching {{tag}}. */
+  char* parseTag(char* line, int line_len);
+
+  /* Find a set of characters within buffer.
+   * Returns: Pointer in buffer to start of first match. */
+  char* findPattern(char* buffer, const char* pattern, int line_len) const;
+
+  /* Replace a {{tag}} with the string in tag_content. */
   bool replaceTag(char* tag_position, const char* tag, char* tag_content);
+
+  /* Populate tag variable with the contents of a tag in bugger pointed to by
+   * tag_position.
+   * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
+  bool tagName(char* tag_start, char* tag, tagType& type);
+
+  void duplicateList(char* tag_start, const char* tag, const int number);
+  
+  int list_element;  // TODO: MAke this an array so we can handle recursive lists.
+  int list_depth;
+  int list_depth_max;
+  char list_parent[128];
 };
+
 
 
 #endif  // ESP8266__HTTP_SERVER__H

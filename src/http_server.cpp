@@ -46,7 +46,10 @@ HttpServer::HttpServer(char* _buffer,
     mdns(_mdns),
     mqtt(_mqtt),
     io(_io),
-    allow_config(_allow_config)
+    allow_config(_allow_config),
+    list_element(-1),
+    list_depth(0),
+    list_parent()
 {
   esp8266_http_server = ESP8266WebServer(HTTP_PORT);
   esp8266_http_server.on("/test", [&]() {onTest();});
@@ -172,7 +175,7 @@ void HttpServer::onRoot(){
   sucess &= bufferAppend(descriptionListItem("WiFI RSSI", String(WiFi.RSSI())));
   
   byte numSsid = WiFi.scanNetworks();
-  for (int thisNet = 0; thisNet<numSsid; thisNet++) {
+  for (int thisNet = 0; thisNet < numSsid; thisNet++) {
     sucess &= bufferAppend(descriptionListItem("WiFi SSID", WiFi.SSID(thisNet) +
         "&nbsp&nbsp&nbsp(" + String(WiFi.RSSI(thisNet)) + ")"));
   }
@@ -634,127 +637,197 @@ bool HttpServer::bufferInsert(const char* to_insert){
 
 void HttpServer::mustacheCompile(char* buffer){
   Serial.println("mustacheCompile");
-  int position = 0;
+  char* buffer_position = buffer;
   char line[255] = "";
-  while(position <= strnlen(buffer, buffer_size)){
-    char* end_line = strchr(buffer + position +1, 13);  // Look for newline.
+
+  while(buffer_position <= buffer + strnlen(buffer, buffer_size)){
+    char* end_line = strchr(buffer_position +1, 13);  // Look for newline char.
     if(!end_line){
       Serial.println("no eol");
       break;
     }
-    char* cr = strchr(line, '\r');  // Remove carriage-returns from windows machines.
-    if(cr){
-      cr = '\0';
+
+    // DEBUG
+      strncpy(line, buffer_position,
+          (end_line - buffer_position >= 254)? 254:end_line - buffer_position);
+      line[(end_line - buffer_position >= 255)? 255:end_line - buffer_position] = '\0';
+      Serial.print("* ");
+      Serial.println(line);
+
+    char* tag_end = parseTag(buffer_position, end_line - buffer_position);
+    if(tag_end) {
+      end_line = tag_end;
     }
-    int end_position = end_line - buffer;
-    strncpy(line, buffer + position, end_position - position);
-    line[end_position - position] = '\0';
-
-    Serial.println(line);
-    char* tmp_buffer = buffer + position;
-    bool found = false;
-
-    do {
-      found = false;
-      char tag[64] = "";
-      char tag_content[128] = "";
-      tmp_buffer = parseTag(tmp_buffer, end_line - tmp_buffer, tag);
-      if(replaceTag(tmp_buffer, tag, tag_content)){
-
-        int tag_len_diff = strlen(tag_content) - strlen(tag) - strlen("{{}}");
-        char* buffer_remainder = tmp_buffer + strlen(tag) +4;
-        // TODO: Make sure we can't go over BUFFER_SIZE.
-        memmove(buffer_remainder + tag_len_diff,
-                buffer_remainder,
-                buffer + BUFFER_SIZE - buffer_remainder);
-        *(buffer + strlen(buffer) + tag_len_diff) = '\0';
-        memmove(tmp_buffer, tag_content, strlen(tag_content));
-
-      }
-      if(tmp_buffer) {
-        found = true;
-      }
-      tmp_buffer += 2;
-    } while(found);
     
-    position = end_position;
+    buffer_position = end_line;
   }
 }
 
-char* HttpServer::parseTag(char* buffer, int line_len, char* tag){
-  if(findPatternInLine(buffer, "{{#", line_len)){
-      return NULL;
-  } else if(findPatternInLine(buffer, "{{^", line_len)){
-      return NULL;
-  } else if(findPatternInLine(buffer, "{{/", line_len)){
-      return NULL;
-  } else if(findPatternInLine(buffer, "{{", line_len)){
-    if(findPatternInLine(buffer, "}}", line_len)){
-      strncpy(tag, findPatternInLine(buffer, "{{", line_len) +2, 64);
-      char* end_pattern = findPatternInLine(tag, "}}", 64);
-      if(end_pattern){
-        *end_pattern = '\0';
-      } else {
-        // empty string.
-        tag[0] = '\0';
+char* HttpServer::parseTag(char* buffer, int line_len){
+  char tag[64] = "";
+  char tag_content[128] = "";
+  tagType type;
+  char* tag_start = findPattern(buffer, "{{", line_len);
+  if(tag_start){
+    bool found_tag = tagName(tag_start, tag, type)
+    if(tag_start[2] == '#'){
+      if(found_tag){
+        replaceTag(tag_start, tag, tag_content);
+        list_element = -1;
+        list_depth++;
+        Serial.print("######## ");
+        Serial.print(list_depth);
+        Serial.print(" ");
+        Serial.println(tag);
+        strncat(list_parent, "|", strlen(list_parent) - 1);
+        strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
+        list_parent[128] = '\0';
+        return tag_start + strlen(tag) + strlen("{{#}}");
       }
-      Serial.println(tag);
-      return findPatternInLine(buffer, "{{", line_len);
+    } else if(tag_start[2] == '/'){
+      if(found_tag){
+        if(list_depth > 0){
+          list_depth--;
+          Serial.print("//////// ");
+          Serial.print(list_depth);
+          Serial.print(" ");
+          Serial.println(tag);
+          char* deliminator = strrchr(list_parent, '|');
+          *deliminator = '\0';
+        } else {
+          Serial.println("Warning: Closing list tag that was never opened.");
+        }
+        return tag_start + strlen(tag) + strlen("{{/}}");
+      }
+    } else if(tag_start[2] == '^'){
+    } else {
+      if(found_tag){
+        replaceTag(tag_start, tag, tag_content);
+        return tag_start + strlen(tag_content);
+      }
     }
+    return tag_start + strlen("{{");
   }
-
   return NULL;
 }
 
-bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content){
-  if(strcmp(tag, "host.mac") == 0){
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    String mac_str = macToStr(mac);
-    mac_str.toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "config.hostname") == 0){
-    strncpy(tag_content, config->hostname, HOSTNAME_LEN);
-  } else if(strcmp(tag, "host.ip") == 0){
-    ip_to_string(WiFi.localIP()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "config.ip") == 0){
-    ip_to_string(config->ip).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.rssi") == 0){
-    String(WiFi.RSSI()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.cpu_freqency") == 0){
-    String(ESP.getCpuFreqMHz()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.flash_size") == 0){
-    String(ESP.getFlashChipSize()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.flash_space") == 0){
-    String(ESP.getFreeSketchSpace()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.flash_ratio") == 0){
-    String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
-      .toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.flash_speed") == 0){
-    String(ESP.getFlashChipSpeed()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.free_memory") == 0){
-    String(ESP.getFreeHeap()).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.sdk_version") == 0){
-    strncpy(tag_content, ESP.getSdkVersion(), 128);
-  } else if(strcmp(tag, "host.core_version") == 0){
-    ESP.getCoreVersion().toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "io.analogue_in") == 0){
-    String(analogRead(A0)).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.uptime") == 0){
-    String(millis() / 1000).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "host.buffer_size") == 0){
-    //String(BUFFER_SIZE).toCharArray(tag_content, 128);
-  } else if(strcmp(tag, "") == 0){
-  } else if(strcmp(tag, "TODO") == 0){
-    strncpy(tag_content, "XX", 128);
+bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
+  for(int i = 0; i < 100; i++){
+    // Skip through any "{{" deliminators and whitespace to start of tag name.
+    if(*tag_start >= '!' and *tag_start <= 'z' and
+        *tag_start != '#' and *tag_start != '/' and *tag_start != '^'){
+      break;
+    }
+    tag_start ++;
   }
-
-  if(strlen(tag_content)){
-    return true;
-  }  
+  if(findPattern(tag_start, "}}", 64)){
+    strncpy(tag, tag_start, 64);
+    char* end_pattern = findPattern(tag, "}}", 64);
+    if(end_pattern){
+      *end_pattern = '\0';
+      while(strlen(tag)){
+        if(tag[strlen(tag)] == ' '){
+          // Remove trailing whitespace.
+          tag[strlen(tag)] = '\0';
+        } else {
+          break;
+        }
+      }
+      Serial.print("   tag: ");
+      Serial.println(tag);
+      return true;
+    }
+    // empty string.
+    tag[0] = '\0';
+  }
   return false;
 }
 
-char* HttpServer::findPatternInLine(char* buffer, const char* pattern, int line_len) const{
+void HttpServer::duplicateList(char* tag_start, const char* tag, const int number){
+  tag_start += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
+  char* tag_end = findPattern(buffer, "{{/", strlen(tag_start));
+  int tag_length = tag_end - tag_start;
+  int move_distance = tag_length * (number -1);
+  
+  // TODO;: Make sure we can't go over BUFFER_SIZE.
+  memmove(tag_end + move_distance, tag_end, strlen(tag_end) +1);
+  for(int i = 1; i < number; i++){
+    memmove(tag_start + (tag_length * i), tag_start, tag_length);
+  }
+}
+
+bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content){
+  if(list_depth == 0){
+    if(strcmp(tag, "host.mac") == 0){
+      uint8_t mac[6];
+      WiFi.macAddress(mac);
+      String mac_str = macToStr(mac);
+      mac_str.toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "config.hostname") == 0){
+      strncpy(tag_content, config->hostname, HOSTNAME_LEN);
+    } else if(strcmp(tag, "host.ip") == 0){
+      ip_to_string(WiFi.localIP()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "config.ip") == 0){
+      ip_to_string(config->ip).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.rssi") == 0){
+      String(WiFi.RSSI()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.cpu_freqency") == 0){
+      String(ESP.getCpuFreqMHz()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.flash_size") == 0){
+      String(ESP.getFlashChipSize()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.flash_space") == 0){
+      String(ESP.getFreeSketchSpace()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.flash_ratio") == 0){
+      String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
+        .toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.flash_speed") == 0){
+      String(ESP.getFlashChipSpeed()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.free_memory") == 0){
+      String(ESP.getFreeHeap()).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.sdk_version") == 0){
+      strncpy(tag_content, ESP.getSdkVersion(), 128);
+    } else if(strcmp(tag, "host.core_version") == 0){
+      ESP.getCoreVersion().toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "io.analogue_in") == 0){
+      String(analogRead(A0)).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.uptime") == 0){
+      String(millis() / 1000).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "host.buffer_size") == 0){
+      String(BUFFER_SIZE).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "TODO") == 0){
+      strncpy(tag_content, "XX", 128);
+    } else if(strcmp(tag, "host.ssids") == 0){
+      list_depth_max = WiFi.scanNetworks();
+      duplicateList(tag_position, tag, list_depth_max);
+    }
+  } else if(list_depth == 1){
+    Serial.println(list_parent);
+    if(strcmp(list_parent, "|host.ssids") == 0){
+      if(strcmp(tag, "name") == 0){
+        list_element++;
+        WiFi.SSID(list_element).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "signal") == 0){
+        String(WiFi.RSSI(list_element)).toCharArray(tag_content, 128);
+      }
+    }
+  }
+
+  if(strlen(tag_content)){
+    int tag_len_diff = strlen(tag_content) - strlen(tag) - strlen("{{}}");
+    char* buffer_remainder = tag_position + strlen(tag) + strlen("{{}}");
+    // TODO: Make sure we can't go over BUFFER_SIZE.
+    memmove(buffer_remainder + tag_len_diff, buffer_remainder, strlen(buffer_remainder) +1);
+    memmove(tag_position, tag_content, strlen(tag_content));
+    return true;
+  }
+
+  strcat(tag_content, "{{");
+  strncat(tag_content, tag, 127 - strlen(tag_content));
+  strncat(tag_content, "}}", 127 - strlen(tag_content));
+  return false;
+}
+
+char* HttpServer::findPattern(char* buffer, const char* pattern, int line_len) const{
   for(int i = 0; i < line_len; i++){
     if(strncmp (buffer + i, pattern, strlen(pattern)) == 0){
       return buffer +i;
