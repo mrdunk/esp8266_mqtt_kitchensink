@@ -61,13 +61,13 @@ class MdnsLookup {
       service_type(service_type_),
       mdns(mdns_instance), 
       active_host(0), 
-      iterator(0), 
+      iterator(-1), 
       last_question_time(0),
       retransmit_in(MDNS_QUESTION_INTERVAL) {}
   MdnsLookup(const String service_type) :
       service_type(service_type),
       active_host(0),
-      iterator(0), 
+      iterator(-1), 
       last_question_time(0),
       retransmit_in(MDNS_QUESTION_INTERVAL) {}
  
@@ -85,7 +85,10 @@ class MdnsLookup {
   void ParseMDnsAnswer(const mdns::Answer* answer);
 
   // Get a host from buffer.
-  Host GetHost();
+  Host GetHost(int best_host = -1);
+
+  // Get the last host GetHost() or IterateHosts() provided.
+  void GetLastHost(Host** host, bool& active);
   
   // Track reliability of Host using the Host.success_counter and Host.fail_counter.
   // Call this with the success/failure of using the device found so CleanBuffer()
@@ -96,6 +99,8 @@ class MdnsLookup {
   // Returns: true if valid Host is found.
   //          false if the end of the array is reached.
   bool IterateHosts(Host** host, bool* active);
+
+  void ResetIterater(){ iterator = -1; }
 
  private:
   void CleanBuffer();

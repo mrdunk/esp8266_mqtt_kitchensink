@@ -27,10 +27,12 @@
 #include "mdns_actions.h"
 
 enum tagType{
+  tagUnset,
   tagPlain,
   tagList,
   tagInverted,
-  tagEnd
+  tagEnd,
+  tagListItem
 };
 
 
@@ -82,7 +84,7 @@ class HttpServer{
   char* findPattern(char* buffer, const char* pattern, int line_len) const;
 
   /* Replace a {{tag}} with the string in tag_content. */
-  bool replaceTag(char* tag_position, const char* tag, char* tag_content);
+  void replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
 
   /* Populate tag variable with the contents of a tag in bugger pointed to by
    * tag_position.
@@ -90,10 +92,13 @@ class HttpServer{
   bool tagName(char* tag_start, char* tag, tagType& type);
 
   void duplicateList(char* tag_start, const char* tag, const int number);
-  
-  int list_element;  // TODO: MAke this an array so we can handle recursive lists.
+  void removeList(char* tag_start_buf, const char* tag);
+ 
+#define MAX_LIST_RECURSION 4 
+  int list_element[MAX_LIST_RECURSION];  
+  int list_size[MAX_LIST_RECURSION];
+  int list_cache_time[MAX_LIST_RECURSION];
   int list_depth;
-  int list_depth_max;
   char list_parent[128];
 };
 

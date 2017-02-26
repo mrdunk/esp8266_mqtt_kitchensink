@@ -47,10 +47,14 @@ HttpServer::HttpServer(char* _buffer,
     mqtt(_mqtt),
     io(_io),
     allow_config(_allow_config),
-    list_element(-1),
     list_depth(0),
     list_parent()
 {
+  for(int i = 0; i < MAX_LIST_RECURSION; i++){
+    list_element[i] = -1;
+    list_size[i] = -1;
+  }
+
   esp8266_http_server = ESP8266WebServer(HTTP_PORT);
   esp8266_http_server.on("/test", [&]() {onTest();});
   esp8266_http_server.on("/", [&]() {onRoot();});
@@ -70,6 +74,10 @@ HttpServer::HttpServer(char* _buffer,
 
 void HttpServer::loop(){
   esp8266_http_server.handleClient();
+}
+
+void  HttpServer::onRoot(){
+  onFileOperations("index.mustache");
 }
 
 void HttpServer::onTest(){
@@ -159,97 +167,6 @@ void HttpServer::fileBrowser(){
   }
   esp8266_http_server.send(200, "text/html", buffer);
   return;
-}
-
-void HttpServer::onRoot(){
-  Serial.println("onRoot() +");
-  bool sucess = true;
-  bufferClear();
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  sucess &= bufferAppend(descriptionListItem("MAC address", macToStr(mac)));
-  sucess &= bufferAppend(descriptionListItem("Hostname", config->hostname));
-  sucess &= bufferAppend(descriptionListItem("IP address", String(ip_to_string(WiFi.localIP()))));
-  sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-
-  sucess &= bufferAppend(descriptionListItem("WiFI RSSI", String(WiFi.RSSI())));
-  
-  byte numSsid = WiFi.scanNetworks();
-  for (int thisNet = 0; thisNet < numSsid; thisNet++) {
-    sucess &= bufferAppend(descriptionListItem("WiFi SSID", WiFi.SSID(thisNet) +
-        "&nbsp&nbsp&nbsp(" + String(WiFi.RSSI(thisNet)) + ")"));
-  }
-  sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-
-  sucess &= bufferAppend(descriptionListItem("CPU frequency", String(ESP.getCpuFreqMHz())));
-  sucess &= bufferAppend(descriptionListItem("Flash size", String(ESP.getFlashChipSize())));
-  sucess &= bufferAppend(descriptionListItem("Flash space",
-      String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize())) + "%"));
-  sucess &= bufferAppend(descriptionListItem("Flash speed", String(ESP.getFlashChipSpeed())));
-  sucess &= bufferAppend(descriptionListItem("Free memory", String(ESP.getFreeHeap())));
-  sucess &= bufferAppend(descriptionListItem("SDK version", ESP.getSdkVersion()));
-  sucess &= bufferAppend(descriptionListItem("Core version", ESP.getCoreVersion()));
-  sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-  sucess &= bufferAppend(descriptionListItem("Analogue in", String(analogRead(A0))));
-  sucess &= bufferAppend(descriptionListItem("System clock", String(millis() / 1000)));
-  sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-  
-  String table = tableStart() + rowStart("") +
-                 header("") + header("service_name") + header("port") +
-                 header("hostname") + header("ip") + header("service valid until") +
-                 header("host valid until") + header("ipv4 valid until") +
-                 header("success rate") +
-                 rowEnd();
-  Host* phost;
-  bool active;
-  while(brokers->IterateHosts(&phost, &active)){
-    if(active){
-      table += rowStart("highlight");
-      table += cell("active");
-    } else {
-      table += rowStart("");
-      table += cell("");
-    }
-    table += cell(phost->service_name);
-    table += cell(String(phost->port));
-    table += cell(phost->host_name);
-    table += cell(ip_to_string(phost->address));
-    table += cell(String(phost->service_valid_until));
-    table += cell(String(phost->host_valid_until));
-    table += cell(String(phost->ipv4_valid_until));
-    table += cell(String(phost->sucess_counter) + " / " +
-                  String(phost->sucess_counter + phost->fail_counter));
-
-    table += rowEnd();
-  }
-  table += tableEnd();
-  sucess &= bufferAppend(descriptionListItem("Brokers", table));
-  
-#ifdef DEBUG_STATISTICS
-  if(mdns->packet_count != 0){
-    sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-    sucess &= bufferAppend(descriptionListItem("mDNS decode success rate",
-        String(mdns->packet_count - mdns->buffer_size_fail) + " / " + 
-        String(mdns->packet_count) + "&nbsp&nbsp&nbsp" +
-        String(100 - (100 * mdns->buffer_size_fail / mdns->packet_count)) + "%"));
-    sucess &= bufferAppend(descriptionListItem("Largest mDNS packet size",
-        String(mdns->largest_packet_seen) + " / " + 
-        String(BUFFER_SIZE) + " bytes"));
-  }
-#endif
-
-  sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-  sucess &= bufferAppend(descriptionListItem("Configure", link("go", "configure")));
-
-  sucess &= bufferInsert(listStart());
-  sucess &= bufferAppend(listEnd());
-  
-  sucess &= bufferInsert(pageHeader("style.css", ""));
-  sucess &= bufferAppend(pageFooter());
-
-  Serial.println(sucess);
-  Serial.println("onRoot() -");
-  esp8266_http_server.send((sucess ? 200 : 500), "text/html", buffer);
 }
 
 bool HttpServer::readFile(const String& filename){
@@ -669,57 +586,81 @@ char* HttpServer::parseTag(char* buffer, int line_len){
   tagType type;
   char* tag_start = findPattern(buffer, "{{", line_len);
   if(tag_start){
-    bool found_tag = tagName(tag_start, tag, type)
-    if(tag_start[2] == '#'){
+    bool found_tag = tagName(tag_start, tag, type);
       if(found_tag){
-        replaceTag(tag_start, tag, tag_content);
-        list_element = -1;
-        list_depth++;
-        Serial.print("######## ");
-        Serial.print(list_depth);
-        Serial.print(" ");
-        Serial.println(tag);
-        strncat(list_parent, "|", strlen(list_parent) - 1);
-        strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
-        list_parent[128] = '\0';
-        return tag_start + strlen(tag) + strlen("{{#}}");
-      }
-    } else if(tag_start[2] == '/'){
-      if(found_tag){
-        if(list_depth > 0){
-          list_depth--;
-          Serial.print("//////// ");
-          Serial.print(list_depth);
-          Serial.print(" ");
-          Serial.println(tag);
-          char* deliminator = strrchr(list_parent, '|');
-          *deliminator = '\0';
-        } else {
-          Serial.println("Warning: Closing list tag that was never opened.");
+        replaceTag(tag_start, tag, tag_content, type);
+        switch(type)
+        {
+          case tagList:
+            list_depth++;
+            if(list_depth < MAX_LIST_RECURSION){
+              list_element[list_depth] = -1;
+              list_size[list_depth] = -1;
+              Serial.print("######## ");
+              Serial.print(list_depth);
+              Serial.print(" ");
+              Serial.println(tag);
+              strncat(list_parent, "|", strlen(list_parent) - 1);
+              strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
+              list_parent[128] = '\0';
+            }
+            return tag_start;
+          case tagEnd:
+            if(list_depth > 0){
+              list_depth--;
+              Serial.print("//////// ");
+              Serial.print(list_depth);
+              Serial.print(" ");
+              Serial.println(tag);
+              char* deliminator = strrchr(list_parent, '|');
+              *deliminator = '\0';
+            } else {
+              Serial.println("Warning: Closing list tag that was never opened.");
+            }
+            return tag_start;
+          default:
+            return tag_start + strlen(tag_content);
         }
-        return tag_start + strlen(tag) + strlen("{{/}}");
       }
-    } else if(tag_start[2] == '^'){
-    } else {
-      if(found_tag){
-        replaceTag(tag_start, tag, tag_content);
-        return tag_start + strlen(tag_content);
-      }
-    }
-    return tag_start + strlen("{{");
+      return tag_start + strlen("{{");
   }
   return NULL;
 }
 
 bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
+  type = tagUnset;
   for(int i = 0; i < 100; i++){
     // Skip through any "{{" deliminators and whitespace to start of tag name.
     if(*tag_start >= '!' and *tag_start <= 'z' and
-        *tag_start != '#' and *tag_start != '/' and *tag_start != '^'){
+        *tag_start != '#' and *tag_start != '/' and
+        *tag_start != '^' and *tag_start != '+'){
       break;
     }
+    switch(*tag_start)
+    {
+      case '#':
+        if(type != tagUnset) {return false;}
+        type = tagList;
+        break;
+      case '^':
+        if(type != tagUnset) {return false;}
+        type = tagInverted;
+        break;
+      case '/':
+        if(type != tagUnset) {return false;}
+        type = tagEnd;
+        break;
+      case '+':
+        if(type != tagUnset) {return false;}
+        type = tagListItem;
+    }
+
     tag_start ++;
   }
+  if(type == tagUnset){
+    type = tagPlain;
+  }
+
   if(findPattern(tag_start, "}}", 64)){
     strncpy(tag, tag_start, 64);
     char* end_pattern = findPattern(tag, "}}", 64);
@@ -743,20 +684,57 @@ bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
   return false;
 }
 
-void HttpServer::duplicateList(char* tag_start, const char* tag, const int number){
-  tag_start += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
-  char* tag_end = findPattern(buffer, "{{/", strlen(tag_start));
-  int tag_length = tag_end - tag_start;
+void HttpServer::duplicateList(char* tag_start_buf, const char* tag, const int number){
+  tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
+  
+  // Make a new tag to deliminate copies of the list-item.
+  char tag_item[69];
+  tag_item[0] = '\0';
+  strcat(tag_item, "{{+");
+  strcat(tag_item, tag);
+  strcat(tag_item, "}}");
+  tag_item[69] = '\0';
+
+  // Insert new tag.
+  memmove(tag_start_buf + strlen(tag_item), tag_start_buf, strlen(tag_start_buf) +1);
+  memmove(tag_start_buf, tag_item, strlen(tag_item));
+
+  // Find the end of the list-itam we want to duplicate.
+  char end_tag[69];
+  end_tag[0] = '\0';
+  strcat(end_tag, "{{/");
+  strcat(end_tag, tag);
+  strcat(end_tag, "}}");
+  end_tag[69] = '\0';
+  char* tag_end_buf = findPattern(tag_start_buf, end_tag, strlen(tag_start_buf));
+
+  // Move remainder of buffer rightwards and insert multiple copies of the list-item.
+  // TODO;: Make sure we can't go over BUFFER_SIZE.
+  int tag_length = tag_end_buf - tag_start_buf;
   int move_distance = tag_length * (number -1);
   
-  // TODO;: Make sure we can't go over BUFFER_SIZE.
-  memmove(tag_end + move_distance, tag_end, strlen(tag_end) +1);
+  memmove(tag_end_buf + move_distance, tag_end_buf, strlen(tag_end_buf) +1);
   for(int i = 1; i < number; i++){
-    memmove(tag_start + (tag_length * i), tag_start, tag_length);
+    memmove(tag_start_buf + (tag_length * i), tag_start_buf, tag_length);
   }
 }
 
-bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content){
+void HttpServer::removeList(char* tag_start_buf, const char* tag){
+  tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
+
+  char end_tag[69];
+  end_tag[0] = '\0';
+  strcat(end_tag, "{{/");
+  strcat(end_tag, tag);
+  strcat(end_tag, "}}");
+  end_tag[69] = '\0';
+
+  char* tag_end_buf = findPattern(tag_start_buf, end_tag, strlen(tag_start_buf));
+  
+  memmove(tag_start_buf, tag_end_buf, strlen(tag_end_buf) +1);
+}
+
+void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type){
   if(list_depth == 0){
     if(strcmp(tag, "host.mac") == 0){
       uint8_t mac[6];
@@ -778,8 +756,10 @@ bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
     } else if(strcmp(tag, "host.flash_space") == 0){
       String(ESP.getFreeSketchSpace()).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "host.flash_ratio") == 0){
-      String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
-        .toCharArray(tag_content, 128);
+      if(ESP.getFlashChipSize() > 0){
+        String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
+          .toCharArray(tag_content, 128);
+      }
     } else if(strcmp(tag, "host.flash_speed") == 0){
       String(ESP.getFlashChipSpeed()).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "host.free_memory") == 0){
@@ -794,37 +774,135 @@ bool HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       String(millis() / 1000).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "host.buffer_size") == 0){
       String(BUFFER_SIZE).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "mdns.packet_count") == 0){
+      String(mdns->packet_count).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "mdns.buffer_fail") == 0){
+      String(mdns->buffer_size_fail).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "mdns.buffer_sucess") == 0){
+      String(mdns->packet_count - mdns->buffer_size_fail).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "mdns.largest_packet_seen") == 0){
+      String(mdns->largest_packet_seen).toCharArray(tag_content, 128);
+    } else if(strcmp(tag, "mdns.success_rate") == 0){
+      if(mdns->packet_count > 0){
+        String(100 - (100 * mdns->buffer_size_fail / mdns->packet_count))
+          .toCharArray(tag_content, 128);
+      }
     } else if(strcmp(tag, "TODO") == 0){
       strncpy(tag_content, "XX", 128);
-    } else if(strcmp(tag, "host.ssids") == 0){
-      list_depth_max = WiFi.scanNetworks();
-      duplicateList(tag_position, tag, list_depth_max);
+    } else if(strcmp(tag, "host.ssids") == 0 and type == tagList){
+      unsigned int now = millis() / 10000;  // 10 Second intervals.
+      if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
+        list_cache_time[list_depth] = now;
+        list_size[list_depth] = WiFi.scanNetworks();
+      }
+      duplicateList(tag_position, tag, list_size[list_depth]);
+    } else if(strcmp(tag, "host.ssids") == 0 and type == tagInverted){
+      unsigned int now = millis() / 10000;  // 10 Second intervals.
+      if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
+        list_cache_time[list_depth] = now;
+        list_size[list_depth] = WiFi.scanNetworks();
+      }
+      if(list_size[list_depth]){
+        removeList(tag_position, tag);
+      }
+    } else if(strcmp(tag, "servers.mqtt") == 0 and type == tagList){
+      Host* p_host;
+      bool active;
+      list_size[list_depth] = 0;
+      brokers->ResetIterater();
+      while(brokers->IterateHosts(&p_host, &active)){
+        list_size[list_depth]++;
+      }
+      brokers->ResetIterater();
+      duplicateList(tag_position, tag, list_size[list_depth]);
+      Serial.println(list_size[list_depth]);
     }
   } else if(list_depth == 1){
-    Serial.println(list_parent);
     if(strcmp(list_parent, "|host.ssids") == 0){
-      if(strcmp(tag, "name") == 0){
-        list_element++;
-        WiFi.SSID(list_element).toCharArray(tag_content, 128);
+      if(strcmp(tag, "host.ssids") == 0 and type == tagListItem){
+        list_element[list_depth]++;
+      } else if(strcmp(tag, "name") == 0){
+        WiFi.SSID(list_element[list_depth]).toCharArray(tag_content, 128);
       } else if(strcmp(tag, "signal") == 0){
-        String(WiFi.RSSI(list_element)).toCharArray(tag_content, 128);
+        String(WiFi.RSSI(list_element[list_depth])).toCharArray(tag_content, 128);
+      }
+    } else if(strcmp(list_parent, "|servers.mqtt") == 0){
+      if(strcmp(tag, "servers.mqtt") == 0 and type == tagListItem){
+        list_element[list_depth]++;
+        Host* p_host;
+        bool active;
+        brokers->IterateHosts(&p_host, &active);
+      } else if(strcmp(tag, "service_name") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        p_host->service_name.toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "host_name") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        p_host->host_name.toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "address") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        ip_to_string(p_host->address).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "port") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->port).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "service_valid_until") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->service_valid_until).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "host_valid_until") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->host_valid_until).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "ipv4_valid_until") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->ipv4_valid_until).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "sucess_counter") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->sucess_counter).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "fail_counter") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->fail_counter).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "connection_attempts") == 0){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        String(p_host->sucess_counter + p_host->fail_counter).toCharArray(tag_content, 128);
+      } else if(strcmp(tag, "active") == 0 && type == tagList){
+        Host* p_host;
+        bool active;
+        brokers->GetLastHost(&p_host, active);
+        if(!active){
+          removeList(tag_position, tag);
+        }
       }
     }
   }
 
-  if(strlen(tag_content)){
-    int tag_len_diff = strlen(tag_content) - strlen(tag) - strlen("{{}}");
-    char* buffer_remainder = tag_position + strlen(tag) + strlen("{{}}");
-    // TODO: Make sure we can't go over BUFFER_SIZE.
-    memmove(buffer_remainder + tag_len_diff, buffer_remainder, strlen(buffer_remainder) +1);
-    memmove(tag_position, tag_content, strlen(tag_content));
-    return true;
+  int tag_len_diff = strlen(tag_content) - strlen(tag) - strlen("{{}}");
+  char* buffer_remainder = tag_position + strlen(tag) + strlen("{{}}");
+  if(type != tagPlain){
+    // The othr tag types are 1 char longer than tagPlain.
+    tag_len_diff--;
+    buffer_remainder++;
   }
-
-  strcat(tag_content, "{{");
-  strncat(tag_content, tag, 127 - strlen(tag_content));
-  strncat(tag_content, "}}", 127 - strlen(tag_content));
-  return false;
+  // TODO: Make sure we can't go over BUFFER_SIZE.
+  memmove(buffer_remainder + tag_len_diff, buffer_remainder, strlen(buffer_remainder) +1);
+  memmove(tag_position, tag_content, strlen(tag_content));
 }
 
 char* HttpServer::findPattern(char* buffer, const char* pattern, int line_len) const{

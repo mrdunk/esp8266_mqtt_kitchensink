@@ -332,10 +332,9 @@ bool MdnsLookup::HostNotTImedOut(Host& host){
           (host.ipv4_valid_until >= now));
 }
 
-Host MdnsLookup::GetHost() {
+Host MdnsLookup::GetHost(int best_host) {
   const unsigned int now = millis() / 1000;
   int total_samples;
-  int best_host = -1;
   float best_ratio = 0;
 
   // TODO: Check for buffer expiring..
@@ -379,15 +378,22 @@ void MdnsLookup::RateHost(bool sucess) {
 }
 
 bool MdnsLookup::IterateHosts(Host** host, bool* active){
+  if(++iterator >= HOSTS_BUFFER_SIZE){
+    iterator = 0;
+  }
   while(iterator < HOSTS_BUFFER_SIZE){
     *active = (iterator == active_host);
     if(hosts[iterator].service_name != "") {
       *host = &(hosts[iterator]);
-      iterator++;
       return true;
     }
     iterator++;
   }
-  iterator = 0;
+  iterator = -1;
   return false;
+}
+
+void MdnsLookup::GetLastHost(Host** p_host, bool& active){
+  *p_host = &(hosts[iterator]);
+  active = (active_host == iterator);
 }

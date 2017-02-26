@@ -16,9 +16,10 @@
       
       <dt>WiFI RSSI</dt><dd>{{host.rssi}}</dd>
 
-      {{#host.ssids}} 
+      {{#host.ssids}}
         <dt>WiFi SSID</dt><dd>{{name}}&nbsp&nbsp&nbsp({{signal}})</dd>
       {{/host.ssids}}
+
       {{^host.ssids}}
         <dt>WiFi SSID</dt><dd>No WiFI networks found.</dd>
       {{/host.ssids}}
@@ -43,23 +44,39 @@
       <dt>Brokers</dt><dd>
         <table>
           <tr class="">
-            <th></th><th>service_name</th><th>port</th><th>hostname</th><th>ip</th><th>service valid until</th><th>host valid until</th><th>ipv4 valid until</th><th>success rate</th>
+            <th></th>
+            <th>service_name</th>
+            <th>hostname</th>
+            <th>ip</th>
+            <th>port</th>
+            <th>service valid until</th>
+            <th>host valid until</th>
+            <th>ipv4 valid until</th>
+            <th>success rate</th>
           </tr>
-          <tr class="highlight">
-            <td>active</td><td>##manually_added##</td><td>1883</td><td>broker_hint</td><td>192.168.192.9</td><td>0</td><td>0</td><td>0</td><td>1 / 1</td>
+      
+          {{#servers.mqtt}} 
+          <tr{{#active}} class="highlight"{{/active}}>
+              <td>{{#active}}active{{/active}}</td>
+              <td>{{service_name}}</td>
+              <td>{{host_name}}</td>
+              <td>{{address}}</td>
+              <td>{{port}}</td>
+              <td>{{service_valid_until}}</td>
+              <td>{{host_valid_until}}</td>
+              <td>{{ipv4_valid_until}}</td>
+              <td>{{sucess_counter}} / {{connection_attempts}}</td>
           </tr>
-          <tr class="">
-            <td></td><td>Mosquitto MQTT server on dir505._mqtt._tcp.local</td><td>1883</td><td>dir505.local</td><td>192.168.192.10</td><td>12931</td><td>8548</td><td>8548</td><td>0 / 0</td>
-          </tr>
-          <tr class="">
-            <td></td><td>Mosquitto MQTT server on twinkle._mqtt._tcp.local</td><td>1883</td><td>twinkle.local</td><td>192.168.192.9</td><td>12931</td><td>8548</td><td>8548</td><td>0 / 0</td>
-          </tr>
+          {{/servers.mqtt}}
         </table>
       </dd>
       <dt>&nbsp</dt><dd>&nbsp</dd>
 
-      <dt>mDNS decode success rate</dt><dd>{{TODO}} / {{TODO2}}&nbsp&nbsp&nbsp{{TODO}}%</dd>
-      <dt>Largest mDNS packet size</dt><dd>{{TODO}} / {{host.buffer_size}} bytes</dd>
+      <dt>mDNS decode success rate</dt>
+        <dd>{{mdns.buffer_sucess}} / {{mdns.packet_count}}
+           &nbsp&nbsp&nbsp{{mdns.success_rate}}%</dd>
+      <dt>Largest mDNS packet size</dt>
+        <dd>{{mdns.largest_packet_seen}} / {{host.buffer_size}} bytes</dd>
       <dt>&nbsp</dt><dd>&nbsp</dd>
       <dt>Configure</dt><dd><a href="configure">go</a></dd>
     </dl>
