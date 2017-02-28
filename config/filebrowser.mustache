@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <head>
+    <link rel="stylesheet" href="style.css">
+    <script src=""></script>
+  </head>
+  <body>
+        <table>
+          <tr>
+            <th>name</th>
+            <th>size</th>
+            <th></th>
+            <th></th>
+            <th></th>
+          </tr>
+          {{#fs.files}}
+          <tr>
+            <td><a href="get?filename={{filename}}">{{filename}}</a></td>
+            <td>{{size}}</td>
+            <td>
+                {{#is_mustache}}
+                  <a href="get?filename={{filename}}&action=raw">raw</a>
+                {{/is_mustache}}
+            </td>
+            <td><a href="get?filename={{filename}}&action=pull">pull</a></td>
+            <td><a href="get?filename={{filename}}&action=del">del</a></td>
+          </tr>
+          {{/fs.files}}
+        </table>
+        <table>
+          <tr>
+            <th>Space:</th>
+            <th>Total</th>
+            <th>Used</th>
+            <th>Free</th>
+          </tr>
+          <tr>
+            <td></td>
+            <td>{{fs.space.size}}</td>
+            <td>{{fs.space.used}}&nbsp;&nbsp({{fs.space.ratio.used}}%)</td>
+            <td>{{fs.space.remaining}}&nbsp;&nbsp({{fs.space.ratio.remaining}}%)</td>
+          </tr>
+        <table>
+  </body>
+</html>
+

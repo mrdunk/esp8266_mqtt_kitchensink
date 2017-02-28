@@ -29,7 +29,7 @@
 extern Io io;
 extern Config config;
 
-// TODO. Make use of config.broker_ip .
+// TODO. Make use of config.brokerip .
 
 
 void Mqtt::loop(){
@@ -55,12 +55,12 @@ void Mqtt::loop(){
 
 void Mqtt::parse_topic(const char* topic, Address_Segment* address_segments){
   // We only care about the part of the topic without the prefix
-  // so check how many segments there are in config.subscribe_prefix
+  // so check how many segments there are in config.subscribeprefix
   // so we can ignore that many segments later.
   int i, segment = 0;
-  if(strlen(config.subscribe_prefix)){
-    for (i=0, segment=-1; config.subscribe_prefix[i]; i++){
-      segment -= (config.subscribe_prefix[i] == '/');
+  if(strlen(config.subscribeprefix)){
+    for (i=0, segment=-1; config.subscribeprefix[i]; i++){
+      segment -= (config.subscribeprefix[i] == '/');
     }
   }
 
@@ -192,7 +192,7 @@ void Mqtt::mqtt_announce_host(){
   announce += ", _ip:";
   announce += ip_to_string(WiFi.localIP());
 
-  String address = config.publish_prefix;
+  String address = config.publishprefix;
   address += "/hosts/_announce";
 
   mqtt_client.publish(address.c_str(), announce.c_str());
@@ -257,15 +257,15 @@ void Mqtt::connect() {
 
     char address[MAX_TOPIC_LENGTH];
    
-    strncpy(address, config.subscribe_prefix, MAX_TOPIC_LENGTH -1);
+    strncpy(address, config.subscribeprefix, MAX_TOPIC_LENGTH -1);
     strncat(address, "/_all/_all", MAX_TOPIC_LENGTH -1 -strlen(address));
     queue_mqtt_subscription(address);
     
-    strncpy(address, config.subscribe_prefix, MAX_TOPIC_LENGTH -1);
+    strncpy(address, config.subscribeprefix, MAX_TOPIC_LENGTH -1);
     strncat(address, "/hosts/_all", MAX_TOPIC_LENGTH -1 - strlen(address));
     queue_mqtt_subscription(address);
 
-    strncpy(address, config.subscribe_prefix, MAX_TOPIC_LENGTH -1);
+    strncpy(address, config.subscribeprefix, MAX_TOPIC_LENGTH -1);
     strncat(address, "/hosts/", MAX_TOPIC_LENGTH -1 - strlen(address));
     strncat(address, config.hostname, MAX_TOPIC_LENGTH -1 - strlen(address));
     queue_mqtt_subscription(address);
@@ -274,7 +274,7 @@ void Mqtt::connect() {
       if (strlen(config.devices[i].address_segment[0].segment) > 0) {
         io.mqttAnnounce(config.devices[i]);
 
-        strncpy(address, config.subscribe_prefix, MAX_TOPIC_LENGTH -1);
+        strncpy(address, config.subscribeprefix, MAX_TOPIC_LENGTH -1);
         strncat(address, "/_all", MAX_TOPIC_LENGTH -1 - strlen(address));
 
         for(int j = 0; j < ADDRESS_SEGMENTS; j++){

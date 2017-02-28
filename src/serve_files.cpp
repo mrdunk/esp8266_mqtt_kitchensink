@@ -29,13 +29,13 @@ extern WiFiClient wifiClient;
 
 // Perform an HTTP GET request to a remote page
 bool getPage(const String& filename, File& file, const Config& config) {
-  Serial.println("Get file from firmware_host."); 
+  Serial.println("Get file from firmwarehost."); 
 
-  if(wifiClient.connect(config.firmware_host, config.firmware_port)){
+  if(wifiClient.connect(config.firmwarehost, config.firmwareport)){
     // Make an HTTP GET request
-    wifiClient.println(String("GET ") + config.firmware_directory + filename + " HTTP/1.1");
+    wifiClient.println(String("GET ") + config.firmwaredirectory + filename + " HTTP/1.1");
     wifiClient.print("Host: ");
-    wifiClient.println(config.firmware_host);
+    wifiClient.println(config.firmwarehost);
     wifiClient.println("Connection: close");
     wifiClient.println();
   } else {

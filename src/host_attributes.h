@@ -30,16 +30,16 @@ struct Config {
   IPAddress ip;
   IPAddress gateway;
   IPAddress subnet;
-  IPAddress broker_ip;
-  int broker_port;
-  char subscribe_prefix[PREFIX_LEN];
-  char publish_prefix[PREFIX_LEN];
+  IPAddress brokerip;
+  int brokerport;
+  char subscribeprefix[PREFIX_LEN];
+  char publishprefix[PREFIX_LEN];
   Connected_device devices[MAX_DEVICES];
-  char firmware_host[STRING_LEN];
-  char firmware_directory[STRING_LEN];
-  int firmware_port;
-  char enable_passphrase[STRING_LEN];
-  int enable_io_pin;
+  char firmwarehost[STRING_LEN];
+  char firmwaredirectory[STRING_LEN];
+  int firmwareport;
+  char enablepassphrase[STRING_LEN];
+  int enableiopin;
   char wifi_ssid[STRING_LEN];
   char wifi_passwd[STRING_LEN];
 
@@ -54,6 +54,25 @@ struct Config {
   bool load(const String& filename="/config.cfg", bool test=false);
   bool save(const String& filename="/config.cfg");
   void insertDevice(Connected_device device);
+
+  int labelToIndex(const int label){
+    int count_valid = -1;
+    int empty_slot = -1;
+    for(int index = 0; index < MAX_DEVICES; index++){
+      if(strlen(devices[index].address_segment[0].segment) > 0) {
+        count_valid++;
+        if(count_valid == label){
+          return index;
+        }
+      } else if(empty_slot < 0){
+        empty_slot = index;
+      }
+    }
+    if(empty_slot >= 0){
+      return empty_slot;
+    }
+    return -1;
+  }
 }; 
 
 

@@ -184,7 +184,7 @@ void Io::loop(){
             mqttAnnounce(config.devices[i]);
 
             // This pin is also the enable pin for the configuration menu.
-            if(i == config.enable_io_pin){
+            if(i == config.enableiopin){
               configInterrupt();
             }
           }
@@ -276,7 +276,7 @@ void Io::mqttAnnounce(const Connected_device& device){
   String payload = "_state:";
   payload += String(device.io_value);
   
-  String topic = config.publish_prefix;
+  String topic = config.publishprefix;
   topic += "/";
   topic += DeviceAddress(device);
 

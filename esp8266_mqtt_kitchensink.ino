@@ -91,6 +91,7 @@ void setPullFirmware(bool pull){
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
     return;
   }
 	
@@ -99,6 +100,7 @@ void setPullFirmware(bool pull){
     File file = SPIFFS.open("/pullFirmware.flag", "w");
     if (!file) {
       Serial.println("file creation failed");
+      SPIFFS.end();
       return;
     }
     file.close();
@@ -106,12 +108,14 @@ void setPullFirmware(bool pull){
     // Remove file, indicating we should not pull new firmware from server after reboot.
     SPIFFS.remove("/pullFirmware.flag");
   }
+  SPIFFS.end();
 }
 
 bool testPullFirmware(){
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
     return false;
   }
 
@@ -119,8 +123,10 @@ bool testPullFirmware(){
   if(file){
     // File exists so we should pull firmware.
     file.close();
+    SPIFFS.end();
     return true;
   }
+  SPIFFS.end();
   return false;
 }
 
@@ -134,9 +140,9 @@ bool pullFirmware(){
 
   for(int tries = 0; tries < UPLOAD_FIRMWARE_RETRIES; tries++){
     ESPhttpUpdate.rebootOnUpdate(false);
-    const String uri(String(config.firmware_directory) + String("firmware.bin"));
-    t_httpUpdate_return ret = ESPhttpUpdate.update(config.firmware_host,
-                                                   config.firmware_port,
+    const String uri(String(config.firmwaredirectory) + String("firmware.bin"));
+    t_httpUpdate_return ret = ESPhttpUpdate.update(config.firmwarehost,
+                                                   config.firmwareport,
                                                    uri);
 
     switch(ret) {
@@ -199,7 +205,7 @@ void setup_network(void) {
   Serial.println(WiFi.localIP());
 
   if(!testPullFirmware()){
-    brokers.InsertManual("broker_hint", config.broker_ip, config.broker_port);
+    brokers.InsertManual("broker_hint", config.brokerip, config.brokerport);
     brokers.RegisterMDns(&my_mdns);
   }
 }
@@ -224,8 +230,8 @@ void setup(void) {
     Serial.println("Pull Firmware mode!!");
   } else {
     // Do IO setup early in case an IO pin needs to hold power to esp8266 on.
-    pinMode(config.enable_io_pin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(config.enable_io_pin), configInterrupt, CHANGE);
+    pinMode(config.enableiopin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(config.enableiopin), configInterrupt, CHANGE);
     io.registerCallback([]() {io.inputCallback();});  // Inline callback function.
     io.setup();
 

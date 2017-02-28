@@ -28,7 +28,8 @@
 
       <dt>CPU frequency</dt><dd>{{host.cpu_freqency}}</dd>
       <dt>Flash size</dt><dd>{{host.flash_size}}</dd>
-      <dt>Flash space</dt><dd>{{host.flash_space}} / {{host.flash_size}}&nbsp;&nbsp;({{host.flash_ratio}}%)</dd>
+      <dt>Flash space</dt>
+      <dd>{{host.flash_space}} / {{host.flash_size}}&nbsp;&nbsp;({{host.flash_ratio}}%)</dd>
       <dt>Flash speed</dt><dd>{{host.flash_speed}}</dd>
       <dt>Free memory</dt><dd>{{host.free_memory}}</dd>
       <dt>SDK version</dt><dd>{{host.sdk_version}}</dd>
@@ -57,7 +58,7 @@
       
           {{#servers.mqtt}} 
           <tr{{#active}} class="highlight"{{/active}}>
-              <td>{{#active}}active{{/active}}</td>
+              <td>{{active}}</td>
               <td>{{service_name}}</td>
               <td>{{host_name}}</td>
               <td>{{address}}</td>

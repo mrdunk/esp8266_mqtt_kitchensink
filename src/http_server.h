@@ -73,7 +73,7 @@ class HttpServer{
   bool bufferInsert(const String& to_insert);
   bool bufferInsert(const char* to_insert);
 
-  void mustacheCompile(char* buffer);
+  void mustacheCompile(char* buff);
 
   /* Search through buffer for a {{tag}} for line_len characters.
    * Returns: Pointer in buffer to end of first matching {{tag}}. */
@@ -81,7 +81,7 @@ class HttpServer{
 
   /* Find a set of characters within buffer.
    * Returns: Pointer in buffer to start of first match. */
-  char* findPattern(char* buffer, const char* pattern, int line_len) const;
+  char* findPattern(char* buff, const char* pattern, int line_len) const;
 
   /* Replace a {{tag}} with the string in tag_content. */
   void replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);

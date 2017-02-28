@@ -65,18 +65,18 @@ void Config::clear(){
   ip = IPAddress(0,0,0,0);
   gateway = IPAddress(0,0,0,0);
   subnet = IPAddress(255,255,255,0);
-  broker_ip = IPAddress(0,0,0,0);
-  broker_port = 1883;
-  subscribe_prefix[0] = '\0';
-  publish_prefix[0] = '\0';
+  brokerip = IPAddress(0,0,0,0);
+  brokerport = 1883;
+  subscribeprefix[0] = '\0';
+  publishprefix[0] = '\0';
   for(int i = 0; i < MAX_DEVICES; i++){
     devices[i] = (const Connected_device){0};
   }
-  firmware_host[0] = '\0';
-  firmware_directory[0] = '\0';
-  firmware_port = 0;
-  enable_passphrase[0] = '\0';
-  enable_io_pin = 0;
+  firmwarehost[0] = '\0';
+  firmwaredirectory[0] = '\0';
+  firmwareport = 0;
+  enablepassphrase[0] = '\0';
+  enableiopin = 0;
   wifi_ssid[0] = '\0';
   wifi_passwd[0] = '\0';
 }
@@ -92,15 +92,15 @@ bool Config::testValue(const String& parent,
        key == "ip" ||
        key == "gateway" ||
        key == "subnet" ||
-       key == "broker_ip" ||
-       key == "broker_port" ||
-       key == "subscribe_prefix" ||
-       key == "publish_prefix" ||
-       key == "firmware_host" ||
-       key == "firmware_directory" ||
-       key == "firmware_port" ||
-       key == "enable_passphrase" ||
-       key == "enable_io_pin" ||
+       key == "brokerip" ||
+       key == "brokerport" ||
+       key == "subscribeprefix" ||
+       key == "publishprefix" ||
+       key == "firmwarehost" ||
+       key == "firmwaredirectory" ||
+       key == "firmwareport" ||
+       key == "enablepassphrase" ||
+       key == "enableiopin" ||
        key == "wifi_ssid" ||
        key == "wifi_passwd" ||
        key == "brokers")
@@ -138,32 +138,32 @@ bool Config::setValue(const String& parent,
     } else if(key == "subnet"){
       subnet = string_to_ip(value);
       return true;
-    } else if(key == "broker_ip"){
-      broker_ip = string_to_ip(value);
+    } else if(key == "brokerip"){
+      brokerip = string_to_ip(value);
       return true;
-    } else if(key == "broker_port"){
-      broker_port = value.toInt();
+    } else if(key == "brokerport"){
+      brokerport = value.toInt();
       return true;
-    } else if(key == "subscribe_prefix"){
-      SetPrefix(value.c_str(), subscribe_prefix);
+    } else if(key == "subscribeprefix"){
+      SetPrefix(value.c_str(), subscribeprefix);
       return true;
-    } else if(key == "publish_prefix"){
-      SetPrefix(value.c_str(), publish_prefix);
+    } else if(key == "publishprefix"){
+      SetPrefix(value.c_str(), publishprefix);
       return true;
-    } else if(key == "firmware_host"){
-      SetFirmwareServer(value.c_str(), firmware_host);
+    } else if(key == "firmwarehost"){
+      SetFirmwareServer(value.c_str(), firmwarehost);
       return true;
-    } else if(key == "firmware_directory"){
-      SetFirmwareServer(value.c_str(), firmware_directory);
+    } else if(key == "firmwaredirectory"){
+      SetFirmwareServer(value.c_str(), firmwaredirectory);
       return true;
-    } else if(key == "firmware_port"){
-      firmware_port = value.toInt();
+    } else if(key == "firmwareport"){
+      firmwareport = value.toInt();
       return true;
-    } else if(key == "enable_passphrase"){
-      value.toCharArray(enable_passphrase, STRING_LEN);
+    } else if(key == "enablepassphrase"){
+      value.toCharArray(enablepassphrase, STRING_LEN);
       return true;
-    } else if(key == "enable_io_pin"){
-      enable_io_pin = value.toInt();
+    } else if(key == "enableiopin"){
+      enableiopin = value.toInt();
       return true;
     } else if(key == "wifi_ssid"){
       // TODO
@@ -217,6 +217,7 @@ bool Config::load(const String& filename, bool test){
   bool result = SPIFFS.begin();
   if(!result){
     Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
     return false;
   }
 
@@ -225,6 +226,7 @@ bool Config::load(const String& filename, bool test){
 
   if (!file) {
     Serial.println("File doesn't exist.");
+    SPIFFS.end();
     return false;
   }
 
@@ -296,6 +298,7 @@ bool Config::load(const String& filename, bool test){
   }
 
   file.close();
+  SPIFFS.end();
   return !error;
 }
 
@@ -303,6 +306,7 @@ bool Config::save(const String& filename){
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
     return false;
   }
 
@@ -321,6 +325,7 @@ bool Config::save(const String& filename){
 	file = SPIFFS.open(filename, "w");
 	if (!file) {
 		Serial.println("file creation failed");
+    SPIFFS.end();
 		return false;
 	}
 
@@ -342,40 +347,40 @@ bool Config::save(const String& filename){
   file.print(ip_to_string(subnet));
   file.println("\",");
 
-	file.print("  \"broker_ip\": \"");
-  file.print(ip_to_string(broker_ip));
+	file.print("  \"brokerip\": \"");
+  file.print(ip_to_string(brokerip));
   file.println("\",");
 
-	file.print("  \"broker_port\": \"");
-  file.print(broker_port);
+	file.print("  \"brokerport\": \"");
+  file.print(brokerport);
   file.println("\",");
 
-	file.print("  \"subscribe_prefix\": \"");
-  file.print(subscribe_prefix);
+	file.print("  \"subscribeprefix\": \"");
+  file.print(subscribeprefix);
   file.println("\",");
 
-	file.print("  \"publish_prefix\": \"");
-  file.print(publish_prefix);
+	file.print("  \"publishprefix\": \"");
+  file.print(publishprefix);
   file.println("\",");
 
-	file.print("  \"firmware_host\": \"");
-  file.print(firmware_host);
+	file.print("  \"firmwarehost\": \"");
+  file.print(firmwarehost);
   file.println("\",");
 
-	file.print("  \"firmware_directory\": \"");
-  file.print(firmware_directory);
+	file.print("  \"firmwaredirectory\": \"");
+  file.print(firmwaredirectory);
   file.println("\",");
 
-	file.print("  \"firmware_port\": \"");
-  file.print(firmware_port);
+	file.print("  \"firmwareport\": \"");
+  file.print(firmwareport);
   file.println("\",");
 
-	file.print("  \"enable_passphrase\": \"");
-  file.print(enable_passphrase);
+	file.print("  \"enablepassphrase\": \"");
+  file.print(enablepassphrase);
   file.println("\",");
 
-	file.print("  \"enable_io_pin\": \"");
-  file.print(enable_io_pin);
+	file.print("  \"enableiopin\": \"");
+  file.print(enableiopin);
   file.println("\",");
 
 	file.print("  \"wifi_ssid\": \"");
@@ -420,6 +425,7 @@ bool Config::save(const String& filename){
   file.close();
   Serial.println("Done saving config file.");
 
+  SPIFFS.end();
   return true;
 }
 
