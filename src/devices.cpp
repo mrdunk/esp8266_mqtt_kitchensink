@@ -142,18 +142,18 @@ void Io::setup(){
     if (strlen(config.devices[i].address_segment[0].segment) > 0) {
       if(config.devices[i].io_type == input_pullup){
         config.devices[i].io_value = 1;
-        setPinMode(config.devices[i].io_pin, INPUT_PULLUP);
-        //pinMode(config.devices[i].io_pin, INPUT_PULLUP);
+        setPinMode(config.devices[i].iopin, INPUT_PULLUP);
+        //pinMode(config.devices[i].iopin, INPUT_PULLUP);
         if(callback){
-          attachInterrupt(digitalPinToInterrupt(config.devices[i].io_pin),
+          attachInterrupt(digitalPinToInterrupt(config.devices[i].iopin),
                           callback, CHANGE);
         }
       } else if(config.devices[i].io_type == input){
         config.devices[i].io_value = 1;
-        setPinMode(config.devices[i].io_pin, INPUT);
-        //pinMode(config.devices[i].io_pin, INPUT);
+        setPinMode(config.devices[i].iopin, INPUT);
+        //pinMode(config.devices[i].iopin, INPUT);
         if(callback){
-          attachInterrupt(digitalPinToInterrupt(config.devices[i].io_pin),
+          attachInterrupt(digitalPinToInterrupt(config.devices[i].iopin),
                           callback, CHANGE);
         }
       } else {
@@ -177,7 +177,7 @@ void Io::loop(){
     for(int i=0; i < MAX_DEVICES; i++){
       if (strlen(config.devices[i].address_segment[0].segment) > 0) {
         if(config.devices[i].io_type == input || config.devices[i].io_type == input_pullup){
-          byte value = digitalRead(config.devices[i].io_pin);
+          byte value = digitalRead(config.devices[i].iopin);
           value = (config.devices[i].inverted ? value == 0 : value);
           if(value != config.devices[i].io_value){
             config.devices[i].io_value = value;
@@ -215,49 +215,49 @@ void Io::changeState(Connected_device& device, String command){
   setState(device);
 }
 
-void Io::setPinMode(uint8_t io_pin, uint8_t mode){
-  if(pin_modes[io_pin] != mode){
-    pin_modes[io_pin] = mode;
-    pinMode(io_pin, mode);
+void Io::setPinMode(uint8_t iopin, uint8_t mode){
+  if(pin_modes[iopin] != mode){
+    pin_modes[iopin] = mode;
+    pinMode(iopin, mode);
   }
 }
 
-void Io::setPinAnalog(uint8_t io_pin, int value){
-  if(pin_analog_value[io_pin] != value){
-    pin_analog_value[io_pin] = value;
-    analogWrite(io_pin, value);
+void Io::setPinAnalog(uint8_t iopin, int value){
+  if(pin_analog_value[iopin] != value){
+    pin_analog_value[iopin] = value;
+    analogWrite(iopin, value);
   }
 }
 
 void Io::setState(Connected_device& device){
   if(device.io_type == onoff){
-    setPinMode(device.io_pin, OUTPUT);
+    setPinMode(device.iopin, OUTPUT);
     // If pin was previously set to Io_Type::pwm we need to switch off analogue output
     // before using digital output.
-    setPinAnalog(device.io_pin, 0);
+    setPinAnalog(device.iopin, 0);
     
-    digitalWrite(device.io_pin, device.inverted ? (device.io_value == 0) : device.io_value);
+    digitalWrite(device.iopin, device.inverted ? (device.io_value == 0) : device.io_value);
   } else if(device.io_type == pwm){
-    setPinMode(device.io_pin, OUTPUT);
-    setPinAnalog(device.io_pin, device.inverted ? (255 - device.io_value) : device.io_value);
+    setPinMode(device.iopin, OUTPUT);
+    setPinAnalog(device.iopin, device.inverted ? (255 - device.io_value) : device.io_value);
   } else if(device.io_type == test){
     Serial.print("Switching pin: ");
-    Serial.print(device.io_pin);
+    Serial.print(device.iopin);
     Serial.print(" to value: ");
     Serial.println(device.inverted ? (255 - device.io_value) : device.io_value);
   } else if(device.io_type == input){
   } else if(device.io_type == input_pullup){
   } else if(device.io_type == timer){
     const unsigned int now = millis() / 1000;
-    setPinMode(device.io_pin, OUTPUT);
+    setPinMode(device.iopin, OUTPUT);
     // If pin was previously set to Io_Type::pwm we need to switch off analogue output
     // before using digital output.
-    setPinAnalog(device.io_pin, 0);
+    setPinAnalog(device.iopin, 0);
 
     if(device.io_value != ((now % device.io_default) != (device.io_default -1))){
       device.io_value = ((now % device.io_default) != (device.io_default -1));
 
-      digitalWrite(device.io_pin, device.inverted ? (device.io_value == 0) : 
+      digitalWrite(device.iopin, device.inverted ? (device.io_value == 0) : 
                                                      device.io_value);
     } else {
       // Only continue to MQTT announcements when state changes.

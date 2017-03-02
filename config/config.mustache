@@ -6,7 +6,7 @@
     <script src="script.js"></script>
   </head>
 	<body>
-		<dl>
+    <dl>
 			<dt>mac_address</dt>
       <dd>{{host.mac}}</dd>
 			<dt>hostname</dt>
@@ -87,11 +87,11 @@
       <dt>Config enable IO pin</dt>
       <dd>
         <select class="enableiopin">
-          {{#config.enableiopin}}
+          {{#iopin}}
           <option value="{{value}}" {{#selected}}selected{{/selected}}>
             {{value}}
           </option>
-          {{/config.enableiopin}}
+          {{/iopin}}
         </select>
       </dd>
       <table>
@@ -124,12 +124,12 @@
             </select>
           </td>
           <td>
-            <select class="device_{{index}}_io_pin">
-              {{#pin}}
+            <select class="device_{{index}}_iopin">
+              {{#iopin}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
               </option>
-              {{/pin}}
+              {{/iopin}}
             </select>
           </td>
           <td>

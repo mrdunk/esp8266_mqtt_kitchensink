@@ -340,8 +340,8 @@ void HttpServer::onConfig(){
               "device_" + String(i) + "_topic")));
         sucess &= bufferAppend(cell(outletType(TypeToString(config->devices[i].io_type),
                                                "device_" + String(i) + "_iotype")));
-        sucess &= bufferAppend(cell(ioPin(config->devices[i].io_pin,
-              "device_" + String(i) + "_io_pin")));
+        sucess &= bufferAppend(cell(ioPin(config->devices[i].iopin,
+              "device_" + String(i) + "_iopin")));
         sucess &= bufferAppend(cell(ioValue(config->devices[i].io_default,
               "device_" + String(i) + "_io_default")));
         sucess &= bufferAppend(cell(ioInverted(config->devices[i].inverted,
@@ -368,7 +368,7 @@ void HttpServer::onConfig(){
                                               String(empty_device) + "_iotype")));
       name = "pin_";
       name.concat(empty_device);
-      sucess &= bufferAppend(cell(ioPin(0, "device_" + String(empty_device) + "_io_pin")));
+      sucess &= bufferAppend(cell(ioPin(0, "device_" + String(empty_device) + "_iopin")));
       sucess &= bufferAppend(cell(ioValue(0, "device_" + String(empty_device) + "_io_default")));
       sucess &= bufferAppend(cell(ioInverted(false, "device_" +
                                              String(empty_device) + "_inverted")));
@@ -490,7 +490,7 @@ void HttpServer::onSet(){
     sucess &= bufferInsert("enableiopin: " + esp8266_http_server.arg("enableiopin") + "\n");
   } else if (esp8266_http_server.hasArg("device") and
              esp8266_http_server.hasArg("address_segment") and
-             esp8266_http_server.hasArg("iotype") and esp8266_http_server.hasArg("io_pin")) {
+             esp8266_http_server.hasArg("iotype") and esp8266_http_server.hasArg("iopin")) {
     unsigned int index = esp8266_http_server.arg("device").toInt();
     Connected_device device;
 
@@ -513,8 +513,8 @@ void HttpServer::onSet(){
       device.setType(esp8266_http_server.arg("iotype"));
     }
 
-    if(esp8266_http_server.hasArg("io_pin")){
-      device.io_pin = esp8266_http_server.arg("io_pin").toInt();
+    if(esp8266_http_server.hasArg("iopin")){
+      device.iopin = esp8266_http_server.arg("iopin").toInt();
     }
     if(esp8266_http_server.hasArg("io_default")){
       device.io_default = esp8266_http_server.arg("io_default").toInt();
@@ -885,6 +885,8 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       if(list_size[list_depth]){
         removeList(tag_position, tag);
       }
+    } else if(type == tagListItem){
+      list_element[list_depth]++;
     }
   } else if(strcmp(tag, "fs.space.used") == 0){
     bool result = SPIFFS.begin();
@@ -947,103 +949,86 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       }
     }
     SPIFFS.end();
-  } else 
-    // The next section matches list tags that need to be called from the top level.
-  if(strcmp(list_parent, "") == 0){
-    if(strcmp(tag, "host.ssids") == 0){
+  } else if(strcmp(tag, "io.entry") == 0){
+    list_size[list_depth] = 0;
+    for (int i = 0; i < MAX_DEVICES; ++i) {
+      if (strlen(config->devices[i].address_segment[0].segment) > 0) {
+        list_size[list_depth]++;
+      }
+    }
+    if(list_size[list_depth] < MAX_DEVICES){
+      list_size[list_depth]++;
+    }
+    if(type == tagPlain){
+      String(list_size[list_depth]).toCharArray(tag_content, 128);
+    } else if(type == tagList){
+      duplicateList(tag_position, tag, list_size[list_depth]);
+    } else if(type == tagInverted){
+      if(list_size[list_depth]){
+        removeList(tag_position, tag);
+      }
+    } else if(type == tagListItem){
+      list_element[list_depth]++;
+    }
+  } else if(strcmp(tag, "servers.mqtt") == 0){
+    if(type == tagPlain){
+      String(list_size[list_depth]).toCharArray(tag_content, 128);
+    } else if(type == tagList){
+      list_size[list_depth] = 0;
+      brokers->ResetIterater();
+      Host* p_host;
+      bool active;
+      while(brokers->IterateHosts(&p_host, &active)){
+        list_size[list_depth]++;
+      }
+      duplicateList(tag_position, tag, list_size[list_depth]);
+    } else if(type == tagInverted){
+      if(list_size[list_depth]){
+        removeList(tag_position, tag);
+      }
+    } else if(type == tagListItem){
+      Host* p_host;
+      bool active;
+      brokers->IterateHosts(&p_host, &active);
+      list_element[list_depth]++;
+    }
+  } else if(strcmp(tag, "host.ssids") == 0){
+    if(type == tagPlain){
+      String(list_size[list_depth]).toCharArray(tag_content, 128);
+    } else if(type == tagList){
       unsigned int now = millis() / 10000;  // 10 Second intervals.
       if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
         list_cache_time[list_depth] = now;
         list_size[list_depth] = WiFi.scanNetworks();
       }
-      if(type == tagPlain){
-        String(list_size[list_depth]).toCharArray(tag_content, 128);
-      } else if(type == tagList){
-        duplicateList(tag_position, tag, list_size[list_depth]);
-      } else if(type == tagInverted){
-        if(list_size[list_depth]){
-          removeList(tag_position, tag);
-        }
+      duplicateList(tag_position, tag, list_size[list_depth]);
+    } else if(type == tagInverted){
+      if(list_size[list_depth]){
+        removeList(tag_position, tag);
       }
-    } else if(strcmp(tag, "servers.mqtt") == 0){
-      Host* p_host;
-      bool active;
-      list_size[list_depth] = 0;
-      brokers->ResetIterater();
-      while(brokers->IterateHosts(&p_host, &active)){
-        list_size[list_depth]++;
-      }
-      if(type == tagPlain){
-        String(list_size[list_depth]).toCharArray(tag_content, 128);
-      } else if(type == tagList){
-        duplicateList(tag_position, tag, list_size[list_depth]);
-      } else if(type == tagInverted){
-        if(list_size[list_depth]){
-          removeList(tag_position, tag);
-        }
-      }
-    } else if(strcmp(tag, "config.enableiopin") == 0){
+    } else if(type == tagListItem){
+      list_element[list_depth]++;
+    }
+  } else if(strcmp(tag, "iopin") == 0){
+    if(type == tagPlain){
+      String(list_size[list_depth]).toCharArray(tag_content, 128);
+    } else if(type == tagList){
       list_size[list_depth] = 11;  // 11 IO pins available on the esp8266.
-      if(type == tagPlain){
-        String(list_size[list_depth]).toCharArray(tag_content, 128);
-      } else if(type == tagList){
-        duplicateList(tag_position, tag, list_size[list_depth]);
-      } else if(type == tagInverted){
-        if(list_size[list_depth]){
-          removeList(tag_position, tag);
-        }
+      duplicateList(tag_position, tag, list_size[list_depth]);
+    } else if(type == tagInverted){
+      if(list_size[list_depth]){
+        removeList(tag_position, tag);
       }
-    } else if(strcmp(tag, "io.entry") == 0){
-      list_size[list_depth] = 0;
-      for (int i = 0; i < MAX_DEVICES; ++i) {
-        if (strlen(config->devices[i].address_segment[0].segment) > 0) {
-          list_size[list_depth]++;
-        }
-      }
-      if(list_size[list_depth] < MAX_DEVICES){
-        list_size[list_depth]++;
-      }
-      if(type == tagPlain){
-        String(list_size[list_depth]).toCharArray(tag_content, 128);
-      } else if(type == tagList){
-        duplicateList(tag_position, tag, list_size[list_depth]);
-      } else if(type == tagInverted){
-        if(list_size[list_depth]){
-          removeList(tag_position, tag);
-        }
-      }
+    } else if(type == tagListItem){
+      list_element[list_depth]++;
     }
   } else 
   // The following tags work inside lists.
-  if(strcmp(list_parent, "|config.enableiopin") == 0){
-    int values[] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
-    if(strcmp(tag, "config.enableiopin") == 0 and type == tagListItem){
-      list_element[list_depth]++;
-    } else if(strcmp(tag, "value") == 0){
-      String(values[list_element[list_depth]]).toCharArray(tag_content, 128);
-    } else if(strcmp(tag, "selected") == 0){
-      if(type == tagPlain){
-        if(config->enableiopin == values[list_element[list_depth]]){
-          strcpy(tag_content, "selected");
-        }
-      } else if(type == tagList){
-        if(config->enableiopin != values[list_element[list_depth]]){
-          removeList(tag_position, tag);
-        }
-      } else if(type == tagInverted){
-        if(config->enableiopin == values[list_element[list_depth]]){
-          removeList(tag_position, tag);
-        }
-      }
-    }
-  } else if(strcmp(list_parent, "|io.entry") == 0){
+  if(strncmp(strrchr(list_parent, '|'), "|io.entry", strlen("|io.entry")) == 0){
     // Not every config->devices entry is populated.
     int index = config->labelToIndex(list_element[list_depth]);
 
-    if(strcmp(tag, "io.entry") == 0 and type == tagListItem){
-      list_element[list_depth]++;
-
-    } else if(strcmp(tag, "index") == 0){
+    if(strcmp(tag, "index") == 0){
       String(index).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "topic") == 0){
       if(type == tagPlain){
@@ -1067,57 +1052,51 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
           removeList(tag_position, tag);
         }
       }
-    } else if(strcmp(tag, "pin") == 0){
-      list_size[list_depth] = 11;  // 11 IO pins available on the esp8266.
-      if(type == tagPlain){
-        String(list_size[list_depth]).toCharArray(tag_content, 128);
-      } else if(type == tagList){
-        duplicateList(tag_position, tag, list_size[list_depth]);
-      } else if(type == tagInverted){
-        if(list_size[list_depth]){
-          removeList(tag_position, tag);
-        }
-      }
     }
-  } else if(strcmp(list_parent, "|io.entry|pin") == 0){
-    int io_entry_index = config->labelToIndex(list_element[list_depth -1]);  // Value of the parent.
+  } else if(strncmp(strrchr(list_parent, '|'), "|iopin", strlen("|iopin")) == 0){
     int values[] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
-    if(strcmp(tag, "pin") == 0 and type == tagListItem){
-      list_element[list_depth]++;
-    } else if(strcmp(tag, "value") == 0){
-      Serial.println(values[list_element[list_depth]]);
+    
+    // Value of the parent.
+    int io_entry_index = config->labelToIndex(list_element[list_depth -1]);  
+    
+    if(strcmp(tag, "value") == 0){
       String(values[list_element[list_depth]]).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "selected") == 0){
+      // Look at parent's parent to see what context this has been called in.
+      // TODO: It would be preferable to pass in a value somehow.
+      char list_parent_copy[128];
+      strcpy(list_parent_copy, list_parent);
+      char* parent_end = strrchr(list_parent_copy, '|');
+      *parent_end = '\0';
+      int selected_value =
+          (strrchr(list_parent_copy, '|') &&
+          (strncmp(strrchr(list_parent_copy, '|'), "|io.entry", strlen("|io.entry")) == 0)) ?
+          config->devices[io_entry_index].iopin  // {{#io.entry} context
+          : config->enableiopin;                 // Otherwise it's probably the enableiopin.
+
       if(type == tagPlain){
-        if(config->devices[io_entry_index].io_pin == values[list_element[list_depth]]){
-          strcpy(tag_content, "selected");
-        }
+        String(tag_content).toCharArray(tag_content, 128); 
       } else if(type == tagList){
-        if(config->devices[io_entry_index].io_pin != values[list_element[list_depth]]){
+        if(selected_value != values[list_element[list_depth]]){
           removeList(tag_position, tag);
         }
       } else if(type == tagInverted){
-        if(config->devices[io_entry_index].io_pin == values[list_element[list_depth]]){
+        if(selected_value == values[list_element[list_depth]]){
           removeList(tag_position, tag);
         }
       }
     }
-  } else if(strcmp(list_parent, "|host.ssids") == 0){
-    if(strcmp(tag, "host.ssids") == 0 and type == tagListItem){
-      list_element[list_depth]++;
-    } else if(strcmp(tag, "name") == 0){
+  } else if(strncmp(strrchr(list_parent, '|'), "|host.ssids", strlen("|host.ssids")) == 0){
+    if(strcmp(tag, "name") == 0){
       WiFi.SSID(list_element[list_depth]).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "signal") == 0){
       String(WiFi.RSSI(list_element[list_depth])).toCharArray(tag_content, 128);
     }
-  } else if(strcmp(list_parent, "|servers.mqtt") == 0){
+  } else if(strncmp(strrchr(list_parent, '|'), "|servers.mqtt", strlen("|servers.mqtt")) == 0){
     Host* p_host;
     bool active;
     brokers->GetLastHost(&p_host, active);
-    if(strcmp(tag, "servers.mqtt") == 0 and type == tagListItem){
-      brokers->IterateHosts(&p_host, &active);
-      list_element[list_depth]++;
-    } else if(strcmp(tag, "service_name") == 0){
+    if(strcmp(tag, "service_name") == 0){
       if(type == tagPlain){
         p_host->service_name.toCharArray(tag_content, 128);
       }
@@ -1182,15 +1161,13 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
         }
       }
     }
-  } else if(strcmp(list_parent, "|fs.files") == 0){
+  } else if(strncmp(strrchr(list_parent, '|'), "|fs.files", strlen("|fs.files")) == 0){
     bool result = SPIFFS.begin();
     if(result){
       Dir dir = SPIFFS.openDir("/");
       for(int i=0; i <= list_element[1] && dir.next(); i++){ }
 
-      if(strcmp(tag, "fs.files") == 0 and type == tagListItem){
-        list_element[list_depth]++;
-      } else if(strcmp(tag, "filename") == 0){
+      if(strcmp(tag, "filename") == 0){
         if(type == tagPlain){
           File file = dir.openFile("r");
           String filename = file.name();

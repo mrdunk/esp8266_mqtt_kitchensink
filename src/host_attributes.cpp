@@ -110,7 +110,7 @@ bool Config::testValue(const String& parent,
   } else if(parent == "brokers"){
     if(key == "address" ||
         key == "io_type" ||
-        key == "io_pin" ||
+        key == "iopin" ||
         key == "io_default" ||
         key == "inverted")
     {
@@ -195,8 +195,8 @@ bool Config::setValue(const String& parent,
     } else if(key == "io_type"){
       device.setType(value);
       return true;
-    } else if(key == "io_pin"){
-      device.io_pin = value.toInt();
+    } else if(key == "iopin"){
+      device.iopin = value.toInt();
       return true;
     } else if(key == "io_default"){
       device.io_default = value.toInt();
@@ -402,8 +402,8 @@ bool Config::save(const String& filename){
       file.print(TypeToString(config.devices[i].io_type));
       file.println("\",");
 
-      file.print("     \"io_pin\": \"");
-      file.print(config.devices[i].io_pin);
+      file.print("     \"iopin\": \"");
+      file.print(config.devices[i].iopin);
       file.println("\",");
 
       //file.print("     \"io_value\": \"");

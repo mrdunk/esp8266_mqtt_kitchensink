@@ -6,12 +6,12 @@ function save(label) {
     var topic = document.getElementsByClassName(label + '_topic')[0].value;
     var topics = topic.split('/');
     var iotype = document.getElementsByClassName(label + '_iotype')[0].value;
-    var io_pin = document.getElementsByClassName(label + '_io_pin')[0].value;
+    var iopin = document.getElementsByClassName(label + '_iopin')[0].value;
     var io_default = document.getElementsByClassName(label + '_io_default')[0].value;
     var inverted = document.getElementsByClassName(label + '_inverted')[0].checked;
     var url = 'http://' + window.location.host + '/set/?device=' + device;
     url += '&iotype=' + iotype;
-    url += '&io_pin=' + io_pin;
+    url += '&iopin=' + iopin;
     url += '&io_default=' + io_default;
     url += '&inverted=' + inverted;
     for(var i = 0; i < topics.length; i++){

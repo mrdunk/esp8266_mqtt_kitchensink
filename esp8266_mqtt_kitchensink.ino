@@ -229,6 +229,7 @@ void setup(void) {
   if(testPullFirmware()){
     Serial.println("Pull Firmware mode!!");
   } else {
+
     // Do IO setup early in case an IO pin needs to hold power to esp8266 on.
     pinMode(config.enableiopin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(config.enableiopin), configInterrupt, CHANGE);
@@ -246,6 +247,7 @@ void setup(void) {
 
     allow_config = 0;
   }
+  Serial.println("done setup");
 }
 
 void loop(void) {

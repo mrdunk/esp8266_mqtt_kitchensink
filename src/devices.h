@@ -38,7 +38,7 @@ enum Io_Type {
 struct Connected_device {
   Address_Segment address_segment[ADDRESS_SEGMENTS];
   Io_Type io_type;
-  int io_pin;
+  int iopin;
   int io_value;
   int io_default;
   bool inverted;
@@ -79,8 +79,8 @@ class Io{
   void mqttAnnounce(const Connected_device& device);
  private:
   void (*callback)();
-  void setPinMode(uint8_t io_pin, uint8_t mode);
-  void setPinAnalog(uint8_t io_pin, int value);
+  void setPinMode(uint8_t iopin, uint8_t mode);
+  void setPinAnalog(uint8_t iopin, int value);
   bool dirty_inputs;
   Mqtt* mqtt;
   unsigned int last_update;
