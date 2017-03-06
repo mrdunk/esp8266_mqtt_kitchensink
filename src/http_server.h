@@ -36,6 +36,78 @@ enum tagType{
 };
 
 
+class MyESP8266WebServer : public ESP8266WebServer{
+ public:
+  MyESP8266WebServer() : ESP8266WebServer(){ }
+  MyESP8266WebServer(int port) : ESP8266WebServer(port){ }
+  bool available(){
+    return bool(_server.available());
+  }
+  uint8_t status(){
+    return _server.status();
+  }
+};
+
+/* Uses Mustache style templates for generating web pages.
+ * http://mustache.github.io/mustache.5.html
+ * */
+class CompileMustache{
+ public:
+  CompileMustache(char* buffer,
+                  const int _buffer_size,
+                  Config* _config,
+                  MdnsLookup* _brokers,
+                  mdns::MDns* _mdns,
+                  Mqtt* _mqtt,
+                  Io* _io);
+
+  int compileChunk(char* buffer_head, int len);
+
+  /* Search through buffer for a {{tag}} for line_len characters.
+   * Returns: Pointer in buffer to end of first matching {{tag}}. */
+  char* parseTag(char* line, int line_len);
+
+  /* Find a set of characters within buffer.
+   * Returns: Pointer in buffer to start of first match. */
+  char* findPattern(char* buff, const char* pattern, int line_len, bool test=true) const;
+
+  /* Replace a {{tag}} with the string in tag_content. */
+  bool replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
+
+  /* Populate tag variable with the contents of a tag in bugger pointed to by
+   * tag_position.
+   * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
+  bool tagName(char* tag_start, char* tag, tagType& type);
+
+  bool duplicateList(char* tag_start, const char* tag, const int number);
+  bool removeList(char* tag_start_buf, const char* tag);
+
+  bool isClean(){
+    return success;
+  }
+
+ private:
+  bool success;
+  int buffer_size;
+  int head;
+  int tail;
+  char* buffer;
+  Config* config;
+  MdnsLookup* brokers;
+  mdns::MDns* mdns;
+  Mqtt* mqtt;
+  Io* io;
+#define MAX_LIST_RECURSION 4 
+  int list_element[MAX_LIST_RECURSION];  
+  int list_size[MAX_LIST_RECURSION];
+  int list_cache_time[MAX_LIST_RECURSION];
+  int list_depth;
+  char list_parent[128];
+  
+  bool myMemmove(char* destination, char* source, int len);
+};
+
+
 class HttpServer{
  public:
   HttpServer(char* _buffer, 
@@ -48,7 +120,7 @@ class HttpServer{
              int* _allow_config);
   void loop();
  private:
-  ESP8266WebServer esp8266_http_server;
+  MyESP8266WebServer esp8266_http_server;
   void onTest();
   void handleNotFound();
   void onFileOperations(const String& _filename = "");
@@ -58,7 +130,10 @@ class HttpServer{
   void onConfig();
   void onSet();
   void onReset();
-  bool readFile(const String& filename);
+  bool fileOpen(const String& filename);
+  bool fileRead();
+  void fileClose();
+  File file;
   char* buffer;
   const int buffer_size;
   Config* config;
@@ -72,34 +147,6 @@ class HttpServer{
   bool bufferAppend(const char* to_add);
   bool bufferInsert(const String& to_insert);
   bool bufferInsert(const char* to_insert);
-
-  void mustacheCompile(char* buff);
-
-  /* Search through buffer for a {{tag}} for line_len characters.
-   * Returns: Pointer in buffer to end of first matching {{tag}}. */
-  char* parseTag(char* line, int line_len);
-
-  /* Find a set of characters within buffer.
-   * Returns: Pointer in buffer to start of first match. */
-  char* findPattern(char* buff, const char* pattern, int line_len) const;
-
-  /* Replace a {{tag}} with the string in tag_content. */
-  void replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
-
-  /* Populate tag variable with the contents of a tag in bugger pointed to by
-   * tag_position.
-   * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
-  bool tagName(char* tag_start, char* tag, tagType& type);
-
-  void duplicateList(char* tag_start, const char* tag, const int number);
-  void removeList(char* tag_start_buf, const char* tag);
- 
-#define MAX_LIST_RECURSION 4 
-  int list_element[MAX_LIST_RECURSION];  
-  int list_size[MAX_LIST_RECURSION];
-  int list_cache_time[MAX_LIST_RECURSION];
-  int list_depth;
-  char list_parent[128];
 };
 
 

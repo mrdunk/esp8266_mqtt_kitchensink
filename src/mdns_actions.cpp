@@ -269,17 +269,17 @@ void MdnsLookup::CleanBuffer(){
  
   // Get worst expired result.
   for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
-    total_samples = hosts[i].sucess_counter + hosts[i].fail_counter;
+    total_samples = hosts[i].success_counter + hosts[i].fail_counter;
     if(total_samples == 0){
       // Prevent division by zero;
       total_samples++;
     }
     if((hosts[i].service_name != String(MANUAL_SERVICE_NAME)) and
-        ((float)hosts[i].sucess_counter / total_samples <= worst_ratio) and
+        ((float)hosts[i].success_counter / total_samples <= worst_ratio) and
         (i != active_host) and
         !HostNotTImedOut(hosts[i]))
     {
-      worst_ratio = (float)hosts[i].sucess_counter / total_samples;
+      worst_ratio = (float)hosts[i].success_counter / total_samples;
       worst_result = i;
     }
   }
@@ -287,16 +287,16 @@ void MdnsLookup::CleanBuffer(){
   if(worst_result < 0){
     // Since no entries have expired, just scrap the worst result.
     for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
-      total_samples = hosts[i].sucess_counter + hosts[i].fail_counter;
+      total_samples = hosts[i].success_counter + hosts[i].fail_counter;
       if(total_samples == 0){
         // Prevent division by zero;
         total_samples++;
       }
       if((hosts[i].service_name != String(MANUAL_SERVICE_NAME)) and
-          ((float)hosts[i].sucess_counter / total_samples <= worst_ratio) and
+          ((float)hosts[i].success_counter / total_samples <= worst_ratio) and
           (i != active_host))
       {
-        worst_ratio = (float)hosts[i].sucess_counter / total_samples;
+        worst_ratio = (float)hosts[i].success_counter / total_samples;
         worst_result = i;
       }
     }
@@ -339,24 +339,24 @@ Host MdnsLookup::GetHost(int best_host) {
 
   // TODO: Check for buffer expiring..
   for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
-    total_samples = hosts[i].sucess_counter + hosts[i].fail_counter;
+    total_samples = hosts[i].success_counter + hosts[i].fail_counter;
     if(HostValid(hosts[i]) and HostNotTImedOut(hosts[i]) and
         ((total_samples == 0) or 
-        ((float)hosts[i].sucess_counter / total_samples > best_ratio))){
+        ((float)hosts[i].success_counter / total_samples > best_ratio))){
       best_host = i;
-      best_ratio = (float)hosts[i].sucess_counter / total_samples;
+      best_ratio = (float)hosts[i].success_counter / total_samples;
     }
   }
 
   if(best_host < 0){
     // Haven't found a host that has not timed out so let's ignore the timeouts.
     for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
-      total_samples = hosts[i].sucess_counter + hosts[i].fail_counter;
+      total_samples = hosts[i].success_counter + hosts[i].fail_counter;
       if(HostValid(hosts[i]) and
           ((total_samples == 0) or 
-           ((float)hosts[i].sucess_counter / total_samples > best_ratio))){
+           ((float)hosts[i].success_counter / total_samples > best_ratio))){
         best_host = i;
-        best_ratio = (float)hosts[i].sucess_counter / total_samples;
+        best_ratio = (float)hosts[i].success_counter / total_samples;
       }
     }
   }
@@ -371,7 +371,7 @@ Host MdnsLookup::GetHost(int best_host) {
 
 void MdnsLookup::RateHost(bool sucess) {
   if (sucess) {
-    hosts[active_host].sucess_counter++;
+    hosts[active_host].success_counter++;
     return;
   }
   hosts[active_host].fail_counter++;

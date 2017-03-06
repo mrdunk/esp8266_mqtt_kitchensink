@@ -50,7 +50,7 @@ struct Host {
   unsigned int service_valid_until;
   unsigned int host_valid_until;
   unsigned int ipv4_valid_until;
-  unsigned int sucess_counter;
+  unsigned int success_counter;
   unsigned int fail_counter;
 };
 

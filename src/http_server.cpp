@@ -46,11 +46,11 @@ HttpServer::HttpServer(char* _buffer,
     mdns(_mdns),
     mqtt(_mqtt),
     io(_io),
-    allow_config(_allow_config),
-    list_depth(0),
-    list_parent()
+    allow_config(_allow_config)
 {
-  esp8266_http_server = ESP8266WebServer(HTTP_PORT);
+  esp8266_http_server = MyESP8266WebServer(HTTP_PORT);
+  esp8266_http_server.on("/favicon.ico", [&]() {
+      esp8266_http_server.send(404, "text/plain", "todo");});
   esp8266_http_server.on("/test", [&]() {onTest();});
   esp8266_http_server.on("/", [&]() {onRoot();});
   esp8266_http_server.on("/configure", [&]() {onConfig();});
@@ -123,13 +123,14 @@ void HttpServer::onFileOperations(const String& _filename){
       }
     } else if(esp8266_http_server.hasArg("action") and
         esp8266_http_server.arg("action") == "del"){
-      if(!readFile(filename)){
+      bool result = SPIFFS.begin();
+      if(!SPIFFS.exists(String("/") + filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
+        SPIFFS.end();
         return;
       }
 
-      bool result = SPIFFS.begin();
       if(!SPIFFS.remove(String("/") + filename)){
         SPIFFS.end();
         bufferAppend("\nUnsuccessful.\n");
@@ -143,27 +144,102 @@ void HttpServer::onFileOperations(const String& _filename){
       esp8266_http_server.send(200, "text/plain", buffer);
     } else if(esp8266_http_server.hasArg("action") and
         esp8266_http_server.arg("action") == "raw"){
-      if(!readFile(filename)){
+
+      esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+      esp8266_http_server.send(200, "text/plain", "");
+
+      // Callback to pass to the read() method.
+      std::function<bool(char*, int)> callback = 
+          [&server = esp8266_http_server](char* buffer, int len)
+      {
+        server.sendContent(buffer);
+        buffer[0] = '\0';
+        return true;
+      };
+
+      if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
         return;
       }
-      esp8266_http_server.send(200, "text/plain", buffer);
+      
+      while(fileRead()){
+        Serial.println(strlen(buffer));
+        esp8266_http_server.sendContent(buffer);
+        bufferClear();
+      }
+
+      fileClose();
+      return;
     } else {
-      // Display file in esp8266 flash.
-      if(!readFile(filename)){
+      // Display default view of file.
+      if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
         return;
       }
-      if(filename.endsWith(".mustache")){
-        mustacheCompile(buffer);
+      
+      esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+
+      if(filename.endsWith(".css")){
+        esp8266_http_server.sendHeader("Cache-Control", "max-age=3600");
       }
-      Serial.print("Done compiling: ");
+
+
+      if(esp8266_http_server.hasArg("action") and
+          esp8266_http_server.arg("action") == "compiled_source"){
+        Serial.print("Displaying compiled_source for: ");
+        Serial.println(filename);
+        esp8266_http_server.send(200, "text/plain", "");
+      } else {
+          Serial.print("Displaying: ");
+          Serial.println(filename);
+        esp8266_http_server.send(200, mime(filename), "");
+      }
+
+      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
+
+      while((compileMustache.findPattern(buffer, "}}", strlen(buffer)) || 
+             fileRead()) && compileMustache.isClean()){
+
+        //Serial.print(" i|");
+        //Serial.println(buffer);
+
+        int compiled_len = min(buffer_size /2, strlen(buffer));
+        if(filename.endsWith(".mustache")){
+          compiled_len = compileMustache.compileChunk(buffer, compiled_len);
+        }
+        if(!compiled_len){
+          fileRead();
+          continue;
+        }
+        
+        char backup_char = buffer[compiled_len];
+        buffer[compiled_len] = '\0';
+
+        //Serial.print(" o|");
+        //Serial.println(buffer);
+        
+        bool available = esp8266_http_server.available();
+        if(available){
+          Serial.println("Error: Problem sending data.");
+          //break;
+        }
+
+        esp8266_http_server.sendContent(buffer);
+        buffer[compiled_len] = backup_char;
+        
+        memmove(buffer, buffer + compiled_len, strlen(buffer + compiled_len) +1);
+      }
+
+      fileClose();
+      //esp8266_http_server.close();
+
       Serial.println(filename);
       Serial.print("buffer length: ");
-      Serial.println(strnlen(buffer, BUFFER_SIZE));
-      esp8266_http_server.send(200, mime(filename), buffer);
+      Serial.println(strnlen(buffer, buffer_size));
+
+      //esp8266_http_server.send(200, mime(filename), buffer);
       return;
     }
   } else {
@@ -193,7 +269,7 @@ void HttpServer::fileBrowser(){
   return;
 }
 
-bool HttpServer::readFile(const String& filename){
+bool HttpServer::fileOpen(const String& filename){
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
@@ -203,7 +279,7 @@ bool HttpServer::readFile(const String& filename){
   }
 
 	// this opens the file in read-mode
-	File file = SPIFFS.open("/" + filename, "r");
+	file = SPIFFS.open("/" + filename, "r");
 
 	if (!file) {
 		Serial.print("File doesn't exist: ");
@@ -213,16 +289,37 @@ bool HttpServer::readFile(const String& filename){
     SPIFFS.end();
     return false;
   }
+  return true;
+}
 
-  while(file.available()) {
-    //Lets read line by line from the file
-    String line = file.readStringUntil('\n');
-    strncat(buffer, line.c_str(), BUFFER_SIZE - strlen(buffer) -1);
+bool HttpServer::fileRead(){
+  int available = file.available();
+  char* buffer_tail = buffer + strnlen(buffer, buffer_size);
+  int buffer_remaining = (buffer_size /2) - strlen(buffer);
+  while(available) {
+    int got = file.readBytesUntil('\n', buffer_tail, min(buffer_remaining, available));
+    buffer_tail[got] = '\0';
+
+    if(buffer_tail[got -1] != 13 || got == 0){
+      Serial.print("break ");
+      Serial.println(available);
+      buffer_tail[0] = '\0';
+      file.seek(-got, SeekCur);
+      break;
+    }
+    buffer_tail += got;
+    buffer_remaining -= got;
+    available = file.available();
   }
 
-	file.close();
+  return ((available > 0) || (strnlen(buffer, buffer_size) > 0));
+}
+
+void HttpServer::fileClose(){
+	if(file){
+    file.close();
+  }
   SPIFFS.end();
-  return true;
 }
 
 const String HttpServer::mime(const String& filename){
@@ -553,6 +650,7 @@ void HttpServer::onReset() {
 }
 
 void HttpServer::bufferClear(){
+  Serial.println("bufferClear");
   buffer[0] = '\0';
 }
 
@@ -579,98 +677,125 @@ bool HttpServer::bufferInsert(const char* to_insert){
   return false;
 }
 
-void HttpServer::mustacheCompile(char* buff){
-  Serial.println("mustacheCompile");
-  ESP.wdtDisable(); 
-
+CompileMustache::CompileMustache(char* _buffer, 
+                                 const int _buffer_size,
+                                 Config* _config,
+                                 MdnsLookup* _brokers,
+                                 mdns::MDns* _mdns,
+                                 Mqtt* _mqtt,
+                                 Io* _io) :
+  buffer(_buffer),  
+  buffer_size(_buffer_size),
+  config(_config),
+  brokers(_brokers),
+  mdns(_mdns),
+  mqtt(_mqtt),
+  io(_io),
+  list_depth(0),
+  list_parent()
+{
   for(int i = 0; i < MAX_LIST_RECURSION; i++){
     list_element[i] = -1;
     list_size[i] = -1;
   }
-  char* buffer_position = buff;
-  char line[255] = "";
-
-  while(buffer_position <= buff + strnlen(buff, buffer_size)){
-    // Strip leading whitespace.
-    // TODO: Only need to do this once and re-save the results.
-    char* start_text = buffer_position +1;
-    while((*start_text == ' ' || *start_text == 9/*tab*/) && strlen(start_text)){
-      start_text++;
-    }
-    memmove(buffer_position +1, start_text, strlen(start_text) +1);
-
-    // Get a line.
-    char* end_line = strchr(buffer_position +1, 13);  // Look for newline char.
-    if(!end_line){
-      Serial.println("no eol");
-      break;
-    }
-
-    // DEBUG
-      strncpy(line, buffer_position,
-          (end_line - buffer_position >= 254)? 254:end_line - buffer_position);
-      line[(end_line - buffer_position >= 255)? 255:end_line - buffer_position] = '\0';
-      Serial.print("* ");
-      Serial.println(line);
-
-    char* tag_end = parseTag(buffer_position, end_line - buffer_position);
-    if(tag_end) {
-      end_line = tag_end;
-    }
-    
-    buffer_position = end_line;
-  }
-  ESP.wdtEnable(0);
+  
+  // Gets set false if buffer over-runs.
+  success = true;
 }
 
-char* HttpServer::parseTag(char* buff, int line_len){
+bool CompileMustache::myMemmove(char* destination, char* source, int len){
+  if(!success){
+    return false;
+  }
+  if(destination + len > buffer + buffer_size){
+    Serial.println("Error: Exceeded buffer size.");
+    len = buffer + buffer_size - destination;
+    return false;
+  }
+  memmove(destination, source, len);
+  return true;
+}
+
+int CompileMustache::compileChunk(char* buffer_head, int len){
+  char* tag_start = findPattern(buffer_head, "{{", len +1);
+
+  if(!tag_start){
+    // No tags so indicate the whole len can be operated on.
+    return min(len, strlen(buffer_head));
+  } else if(buffer_head + len - tag_start > 64) {
+    // Can operate on everything up to the start of any subsequent tag.
+    char* tag_end = parseTag(buffer_head, len);
+    if(!tag_end){
+      return 0;
+    }
+    char* second_tag = findPattern(tag_end, "{{", (len - (tag_start - buffer_head) +1), false);
+    if(second_tag){
+      // Return length to start of next tag.
+      return second_tag - buffer_head;
+    }
+    // No other tag in range so return length to the end of the first tag if it
+    // extends past the buffer section we were looking in.
+    return max((tag_end - buffer_head), len);
+  }
+  // There is a tag but it overlaps the end of len.
+  // Process everything up to the start of the tag.
+  return tag_start - buffer_head -1;
+}
+
+char* CompileMustache::parseTag(char* buff, int line_len){
   char tag[64] = "";
   char tag_content[128] = "";
   tagType type;
   char* tag_start = findPattern(buff, "{{", line_len);
   if(tag_start){
     bool found_tag = tagName(tag_start, tag, type);
-      if(found_tag){
-        replaceTag(tag_start, tag, tag_content, type);
-        switch(type)
-        {
-          case tagList:
-            list_depth++;
-            if(list_depth < MAX_LIST_RECURSION){
-              list_element[list_depth] = -1;
-              list_size[list_depth] = -1;
-              Serial.print("######## ");
-              Serial.print(list_depth);
-              Serial.print(" ");
-              Serial.println(tag);
-              strncat(list_parent, "|", strlen(list_parent) - 1);
-              strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
-              list_parent[128] = '\0';
-            }
-            return tag_start;
-          case tagEnd:
-            if(list_depth > 0){
-              list_depth--;
-              Serial.print("//////// ");
-              Serial.print(list_depth);
-              Serial.print(" ");
-              Serial.println(tag);
-              char* deliminator = strrchr(list_parent, '|');
-              *deliminator = '\0';
-            } else {
-              Serial.println("Warning: Closing list tag that was never opened.");
-            }
-            return tag_start;
-          default:
-            return tag_start + strlen(tag_content);
-        }
+    if(!success){
+      return NULL;
+    }
+
+    if(found_tag){
+      if(!success || !replaceTag(tag_start, tag, tag_content, type)){
+        return NULL;
       }
-      return tag_start + strlen("{{");
+      switch(type)
+      {
+        case tagList:
+          list_depth++;
+          if(list_depth < MAX_LIST_RECURSION){
+            list_element[list_depth] = -1;
+            list_size[list_depth] = -1;
+            //Serial.print("######## ");
+            //Serial.print(list_depth);
+            //Serial.print(" ");
+            //Serial.println(tag);
+            strncat(list_parent, "|", strlen(list_parent) - 1);
+            strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
+            list_parent[128] = '\0';
+          }
+          return tag_start;
+        case tagEnd:
+          if(list_depth > 0){
+            list_depth--;
+            //Serial.print("//////// ");
+            //Serial.print(list_depth);
+            //Serial.print(" ");
+            //Serial.println(tag);
+            char* deliminator = strrchr(list_parent, '|');
+            *deliminator = '\0';
+          } else {
+            Serial.println("Warning: Closing list tag that was never opened.");
+          }
+          return tag_start;
+        default:
+          return tag_start + strlen(tag_content);
+      }
+    }
+    return tag_start + strlen("{{");
   }
   return NULL;
 }
 
-bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
+bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
   type = tagUnset;
   for(int i = 0; i < 100; i++){
     // Skip through any "{{" deliminators and whitespace to start of tag name.
@@ -706,7 +831,7 @@ bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
 
   if(findPattern(tag_start, "}}", 64)){
     strncpy(tag, tag_start, 64);
-    char* end_pattern = findPattern(tag, "}}", 64);
+    char* end_pattern = findPattern(tag, "}}", 64, false);
     if(end_pattern){
       *end_pattern = '\0';
       while(strlen(tag)){
@@ -725,9 +850,29 @@ bool HttpServer::tagName(char* tag_start, char* tag, tagType& type){
   return false;
 }
 
-void HttpServer::duplicateList(char* tag_start_buf, const char* tag, const int number){
+bool CompileMustache::duplicateList(char* tag_start_buf, const char* tag, const int number){
+  if(!success){
+    Serial.println("ERROR: Previous failure.");
+    return false;
+  }
+
   tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
   
+  // Find the end of the list-item we want to duplicate.
+  char end_tag[69];
+  end_tag[0] = '\0';
+  strcat(end_tag, "{{/");
+  strcat(end_tag, tag);
+  strcat(end_tag, "}}");
+  end_tag[69] = '\0';
+  char* tag_end_buf = findPattern(tag_start_buf, end_tag, strlen(tag_start_buf));
+  if(!tag_end_buf){
+    Serial.println(end_tag);
+    Serial.println(tag_start_buf);
+    Serial.println("Warning: could not find end_tag within buffer.");
+    return false;
+  }
+
   // Make a new tag to deliminate copies of the list-item.
   char tag_item[69];
   tag_item[0] = '\0';
@@ -737,38 +882,26 @@ void HttpServer::duplicateList(char* tag_start_buf, const char* tag, const int n
   tag_item[69] = '\0';
 
   // Insert new tag.
-  if(tag_start_buf + strlen(tag_item) + strlen(tag_start_buf) +1 > buffer + BUFFER_SIZE){
-    Serial.println("ERROR: Over-ran buffer");
-    return;
-  }
-  memmove(tag_start_buf + strlen(tag_item), tag_start_buf, strlen(tag_start_buf) +1);
-  memmove(tag_start_buf, tag_item, strlen(tag_item));
-
-  // Find the end of the list-item we want to duplicate.
-  char end_tag[69];
-  end_tag[0] = '\0';
-  strcat(end_tag, "{{/");
-  strcat(end_tag, tag);
-  strcat(end_tag, "}}");
-  end_tag[69] = '\0';
-  char* tag_end_buf = findPattern(tag_start_buf, end_tag, strlen(tag_start_buf));
+  success &= 
+    myMemmove(tag_start_buf + strlen(tag_item), tag_start_buf, strlen(tag_start_buf) +1);
+  success &= myMemmove(tag_start_buf, tag_item, strlen(tag_item));
 
   // Move remainder of buffer rightwards and insert multiple copies of the list-item.
-  // TODO;: Make sure we can't go over BUFFER_SIZE.
+  tag_end_buf += strlen(tag_item);
   int tag_length = tag_end_buf - tag_start_buf;
   int move_distance = tag_length * (number -1);
   
-  if(tag_end_buf + move_distance + strlen(tag_end_buf) +1 > buffer + BUFFER_SIZE){
-    Serial.println("ERROR: Over-ran buffer");
-    return;
-  }
-  memmove(tag_end_buf + move_distance, tag_end_buf, strlen(tag_end_buf) +1);
+  success &= 
+    myMemmove(tag_end_buf + move_distance, tag_end_buf, strlen(tag_end_buf) +1);
   for(int i = 1; i < number; i++){
-    memmove(tag_start_buf + (tag_length * i), tag_start_buf, tag_length);
+    success &= 
+      myMemmove(tag_start_buf + (tag_length * i), tag_start_buf, tag_length);
   }
+
+  return success;
 }
 
-void HttpServer::removeList(char* tag_start_buf, const char* tag){
+bool CompileMustache::removeList(char* tag_start_buf, const char* tag){
   tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
 
   char end_tag[69];
@@ -779,15 +912,24 @@ void HttpServer::removeList(char* tag_start_buf, const char* tag){
   end_tag[69] = '\0';
 
   char* tag_end_buf = findPattern(tag_start_buf, end_tag, strlen(tag_start_buf));
+  if(!tag_end_buf){
+    return false;
+  }
   
-  memmove(tag_start_buf, tag_end_buf, strlen(tag_end_buf) +1);
+  success &= myMemmove(tag_start_buf, tag_end_buf, strlen(tag_end_buf) +1);
+  
+  return success;
 }
 
-void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type){
-  Serial.print("tag: ");
-  Serial.print(tag);
-  Serial.print("  list_parent: ");
-  Serial.println(list_parent);
+bool CompileMustache::replaceTag(char* tag_position, 
+                                 const char* tag,
+                                 char* tag_content,
+                                 tagType type)
+{
+  //Serial.print("tag: ");
+  //Serial.print(tag);
+  //Serial.print("  list_parent: ");
+  //Serial.println(list_parent);
 
   // These tags should work anywhere. (Either inside or outside lists.
   if(strcmp(tag, "host.mac") == 0){
@@ -847,7 +989,7 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
   } else if(strcmp(tag, "host.uptime") == 0){
     String(millis() / 1000).toCharArray(tag_content, 128);
   } else if(strcmp(tag, "host.buffer_size") == 0){
-    String(BUFFER_SIZE).toCharArray(tag_content, 128);
+    String(buffer_size).toCharArray(tag_content, 128);
   } else if(strcmp(tag, "mdns.packet_count") == 0){
     String(mdns->packet_count).toCharArray(tag_content, 128);
   } else if(strcmp(tag, "mdns.buffer_fail") == 0){
@@ -867,23 +1009,24 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       list_cache_time[list_depth] = now;
       list_size[list_depth] = 0;
       bool result = SPIFFS.begin();
-      if(result){
-        Dir dir = SPIFFS.openDir("/");
-        while(dir.next()){
-          list_size[list_depth]++;
-        }
-      } else {
-        Serial.println("ERROR: Unable to initialise SPIFFS fs.");
+      if(!result){
+        Serial.println("SPIFFS already mounted");
       }
-      SPIFFS.end();
+      Dir dir = SPIFFS.openDir("/");
+      while(dir.next()){
+        list_size[list_depth]++;
+      }
+      if(result){
+        SPIFFS.end();
+      }
     }
     if(type == tagPlain){
       String(list_size[list_depth]).toCharArray(tag_content, 128);
     } else if(type == tagList){
-      duplicateList(tag_position, tag, list_size[list_depth]);
+      success &= duplicateList(tag_position, tag, list_size[list_depth]);
     } else if(type == tagInverted){
       if(list_size[list_depth]){
-        removeList(tag_position, tag);
+        success &= removeList(tag_position, tag);
       }
     } else if(type == tagListItem){
       list_element[list_depth]++;
@@ -962,10 +1105,13 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
     if(type == tagPlain){
       String(list_size[list_depth]).toCharArray(tag_content, 128);
     } else if(type == tagList){
-      duplicateList(tag_position, tag, list_size[list_depth]);
+      //success &= duplicateList(tag_position, tag, list_size[list_depth]);
+      if(!duplicateList(tag_position, tag, list_size[list_depth])){
+        return false;
+      }
     } else if(type == tagInverted){
       if(list_size[list_depth]){
-        removeList(tag_position, tag);
+        success &= removeList(tag_position, tag);
       }
     } else if(type == tagListItem){
       list_element[list_depth]++;
@@ -981,10 +1127,10 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       while(brokers->IterateHosts(&p_host, &active)){
         list_size[list_depth]++;
       }
-      duplicateList(tag_position, tag, list_size[list_depth]);
+      success &= duplicateList(tag_position, tag, list_size[list_depth]);
     } else if(type == tagInverted){
       if(list_size[list_depth]){
-        removeList(tag_position, tag);
+        success &= removeList(tag_position, tag);
       }
     } else if(type == tagListItem){
       Host* p_host;
@@ -1001,10 +1147,10 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
         list_cache_time[list_depth] = now;
         list_size[list_depth] = WiFi.scanNetworks();
       }
-      duplicateList(tag_position, tag, list_size[list_depth]);
+      success &= duplicateList(tag_position, tag, list_size[list_depth]);
     } else if(type == tagInverted){
       if(list_size[list_depth]){
-        removeList(tag_position, tag);
+        success &= removeList(tag_position, tag);
       }
     } else if(type == tagListItem){
       list_element[list_depth]++;
@@ -1014,17 +1160,18 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       String(list_size[list_depth]).toCharArray(tag_content, 128);
     } else if(type == tagList){
       list_size[list_depth] = 11;  // 11 IO pins available on the esp8266.
-      duplicateList(tag_position, tag, list_size[list_depth]);
+      success &= duplicateList(tag_position, tag, list_size[list_depth]);
     } else if(type == tagInverted){
       if(list_size[list_depth]){
-        removeList(tag_position, tag);
+        success &= removeList(tag_position, tag);
       }
     } else if(type == tagListItem){
       list_element[list_depth]++;
     }
-  } else 
+  }
+
   // The following tags work inside lists.
-  if(strncmp(strrchr(list_parent, '|'), "|io.entry", strlen("|io.entry")) == 0){
+  if(strstr(list_parent, "|io.entry")){
     // Not every config->devices entry is populated.
     int index = config->labelToIndex(list_element[list_depth]);
 
@@ -1045,15 +1192,17 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
           .toCharArray(tag_content, 128);
       } else if(type == tagList){
         if(!config->devices[index].inverted){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       } else if(type == tagInverted){
         if(config->devices[index].inverted){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       }
     }
-  } else if(strncmp(strrchr(list_parent, '|'), "|iopin", strlen("|iopin")) == 0){
+  }
+  
+  if(strstr(list_parent, "|iopin")){
     int values[] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
     
     // Value of the parent.
@@ -1078,21 +1227,25 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
         String(tag_content).toCharArray(tag_content, 128); 
       } else if(type == tagList){
         if(selected_value != values[list_element[list_depth]]){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       } else if(type == tagInverted){
         if(selected_value == values[list_element[list_depth]]){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       }
     }
-  } else if(strncmp(strrchr(list_parent, '|'), "|host.ssids", strlen("|host.ssids")) == 0){
+  }
+    
+  if(strstr(list_parent, "|host.ssids")){
     if(strcmp(tag, "name") == 0){
       WiFi.SSID(list_element[list_depth]).toCharArray(tag_content, 128);
     } else if(strcmp(tag, "signal") == 0){
       String(WiFi.RSSI(list_element[list_depth])).toCharArray(tag_content, 128);
     }
-  } else if(strncmp(strrchr(list_parent, '|'), "|servers.mqtt", strlen("|servers.mqtt")) == 0){
+  }
+  
+  if(strstr(list_parent, "|servers.mqtt")){
     Host* p_host;
     bool active;
     brokers->GetLastHost(&p_host, active);
@@ -1128,9 +1281,9 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       if(type == tagPlain){
         String(p_host->ipv4_valid_until).toCharArray(tag_content, 128);
       }
-    } else if(strcmp(tag, "sucess_counter") == 0){
+    } else if(strcmp(tag, "success_counter") == 0){
       if(type == tagPlain){
-        String(p_host->sucess_counter).toCharArray(tag_content, 128);
+        String(p_host->success_counter).toCharArray(tag_content, 128);
       } else if(type == tagList){
       } else if(type == tagInverted){
       }
@@ -1142,7 +1295,7 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
       }
     } else if(strcmp(tag, "connection_attempts") == 0){
       if(type == tagPlain){
-        String(p_host->sucess_counter + p_host->fail_counter).toCharArray(tag_content, 128);
+        String(p_host->success_counter + p_host->fail_counter).toCharArray(tag_content, 128);
       } else if(type == tagList){
       } else if(type == tagInverted){
       }
@@ -1153,15 +1306,17 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
         }
       } else if(type == tagList){
         if(!active){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       } else if(type == tagInverted){
         if(active){
-          removeList(tag_position, tag);
+          success &= removeList(tag_position, tag);
         }
       }
     }
-  } else if(strncmp(strrchr(list_parent, '|'), "|fs.files", strlen("|fs.files")) == 0){
+  }
+
+  if(strstr(list_parent, "|fs.files")){
     bool result = SPIFFS.begin();
     if(result){
       Dir dir = SPIFFS.openDir("/");
@@ -1190,11 +1345,11 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
           strncpy(tag_content, (test ? "Y":"N"), 128);
         } else if(type == tagList){
           if(!test){
-            removeList(tag_position, tag);
+            success &= removeList(tag_position, tag);
           }
         } else if(type == tagInverted){
           if(test){
-            removeList(tag_position, tag);
+            success &= removeList(tag_position, tag);
           }
         }
       }
@@ -1209,13 +1364,26 @@ void HttpServer::replaceTag(char* tag_position, const char* tag, char* tag_conte
     tag_len_diff--;
     buffer_remainder++;
   }
-  // TODO: Make sure we can't go over BUFFER_SIZE.
-  memmove(buffer_remainder + tag_len_diff, buffer_remainder, strlen(buffer_remainder) +1);
-  memmove(tag_position, tag_content, strlen(tag_content));
+  success &= 
+    myMemmove(buffer_remainder + tag_len_diff, buffer_remainder, strlen(buffer_remainder) +1);
+  success &= myMemmove(tag_position, tag_content, strlen(tag_content));
+  return true;
 }
 
-char* HttpServer::findPattern(char* buff, const char* pattern, int line_len) const{
+char* CompileMustache::findPattern(char* buff, const char* pattern, int line_len, bool test)
+  const{
   for(int i = 0; i < line_len; i++){
+    if(test and ((int)buff + i) > ((int)buffer + buffer_size)){
+      Serial.print("ERROR: over-ran buffer in findPattern() ");
+      Serial.print((int)buff + i);
+      Serial.print(" ");
+      Serial.print((int)buffer + buffer_size);
+      Serial.print(" ");
+      Serial.print(line_len);
+      Serial.print(" ");
+      Serial.println(i);
+      return NULL;
+    }
     if(strncmp (buff + i, pattern, strlen(pattern)) == 0){
       return buff +i;
     }
