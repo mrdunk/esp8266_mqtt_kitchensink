@@ -199,8 +199,8 @@ void HttpServer::onFileOperations(const String& _filename){
 
       CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
 
-      while((compileMustache.findPattern(buffer, "}}", strlen(buffer)) || 
-             fileRead()) && compileMustache.isClean()){
+      bool force_send = false;
+      while((strlen(buffer) || fileRead()) && compileMustache.isClean()){
 
         //Serial.print(" i|");
         //Serial.println(buffer);
@@ -211,26 +211,31 @@ void HttpServer::onFileOperations(const String& _filename){
         }
         if(!compiled_len){
           fileRead();
+          force_send = true;
           continue;
         }
         
-        char backup_char = buffer[compiled_len];
-        buffer[compiled_len] = '\0';
-
-        //Serial.print(" o|");
-        //Serial.println(buffer);
-        
-        bool available = esp8266_http_server.available();
-        if(available){
-          Serial.println("Error: Problem sending data.");
-          //break;
+        if(compiled_len >= strlen(buffer)){
+          esp8266_http_server.sendContent(buffer);
+          break;
         }
 
-        esp8266_http_server.sendContent(buffer);
-        buffer[compiled_len] = backup_char;
-        
-        memmove(buffer, buffer + compiled_len, strlen(buffer + compiled_len) +1);
+        if(force_send || compiled_len >= buffer_size /4){
+          force_send = false;
+
+          char backup_char = buffer[compiled_len];
+          buffer[compiled_len] = '\0';
+
+          //Serial.print(" o|");
+          //Serial.println(buffer);
+
+          esp8266_http_server.sendContent(buffer);
+
+          buffer[compiled_len] = backup_char;
+          memmove(buffer, buffer + compiled_len, strlen(buffer + compiled_len) +1);
+        }
       }
+      esp8266_http_server.sendHeader("Connection", "close");
 
       fileClose();
       //esp8266_http_server.close();

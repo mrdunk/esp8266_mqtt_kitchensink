@@ -74,7 +74,7 @@ class CompileMustache{
   /* Replace a {{tag}} with the string in tag_content. */
   bool replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
 
-  /* Populate tag variable with the contents of a tag in bugger pointed to by
+  /* Populate tag variable with the contents of a tag in buffer pointed to by
    * tag_position.
    * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
   bool tagName(char* tag_start, char* tag, tagType& type);
