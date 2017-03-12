@@ -163,7 +163,7 @@ void HttpServer::onFileOperations(const String& _filename){
         return;
       }
       
-      while(fileRead()){
+      while(fileRead(buffer, buffer_size)){
         Serial.println(strlen(buffer));
         esp8266_http_server.sendContent(buffer);
         bufferClear();
@@ -199,46 +199,25 @@ void HttpServer::onFileOperations(const String& _filename){
 
       CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
 
-      bool force_send = false;
-      while((strlen(buffer) || fileRead()) && compileMustache.isClean()){
-
-        //Serial.print(" i|");
-        //Serial.println(buffer);
-
-        int compiled_len = min(buffer_size /2, strlen(buffer));
-        if(filename.endsWith(".mustache")){
-          compiled_len = compileMustache.compileChunk(buffer, compiled_len);
-        }
-        if(!compiled_len){
-          fileRead();
-          force_send = true;
-          continue;
-        }
-        
-        if(compiled_len >= strlen(buffer)){
-          esp8266_http_server.sendContent(buffer);
-          break;
-        }
-
-        if(force_send || compiled_len >= buffer_size /4){
-          force_send = false;
-
-          char backup_char = buffer[compiled_len];
-          buffer[compiled_len] = '\0';
-
-          //Serial.print(" o|");
-          //Serial.println(buffer);
-
-          esp8266_http_server.sendContent(buffer);
-
-          buffer[compiled_len] = backup_char;
-          memmove(buffer, buffer + compiled_len, strlen(buffer + compiled_len) +1);
-        }
+      int list_depth = 0;
+      bool parsing_list = false;
+      int buffer_in_len = 200;
+      char* buffer_in = (char*)malloc(buffer_in_len);
+      int buffer_out_len = 2000;
+      char* buffer_out = (char*)malloc(buffer_out_len);
+      buffer_in[0] = '\0';
+      while(fileRead(buffer_in, buffer_in_len)){
+        Serial.println("-----------------------");
+        compileMustache.parseBuffer(buffer_in, buffer_in_len,
+                                    buffer_out, buffer_out_len,
+                                    list_depth, parsing_list);
+        esp8266_http_server.sendContent(buffer_out);
       }
-      esp8266_http_server.sendHeader("Connection", "close");
+      free(buffer_in);
+      free(buffer_out);
 
+      esp8266_http_server.sendHeader("Connection", "close");
       fileClose();
-      //esp8266_http_server.close();
 
       Serial.println(filename);
       Serial.print("buffer length: ");
@@ -297,17 +276,21 @@ bool HttpServer::fileOpen(const String& filename){
   return true;
 }
 
-bool HttpServer::fileRead(){
+bool HttpServer::fileRead(char* buffer_in, const int buffer_in_len){
   int available = file.available();
-  char* buffer_tail = buffer + strnlen(buffer, buffer_size);
-  int buffer_remaining = (buffer_size /2) - strlen(buffer);
+  int starting_len = strnlen(buffer_in, buffer_in_len);
+  /*char* buffer_tail = buffer_in + strnlen(buffer_in, buffer_in_len);
+  int buffer_remaining = (buffer_in_len /2) - strlen(buffer_in);
   while(available) {
     int got = file.readBytesUntil('\n', buffer_tail, min(buffer_remaining, available));
     buffer_tail[got] = '\0';
 
     if(buffer_tail[got -1] != 13 || got == 0){
       Serial.print("break ");
+      Serial.print(strlen(buffer_in));
+      Serial.print(" ");
       Serial.println(available);
+      Serial.println(buffer_in);
       buffer_tail[0] = '\0';
       file.seek(-got, SeekCur);
       break;
@@ -315,9 +298,12 @@ bool HttpServer::fileRead(){
     buffer_tail += got;
     buffer_remaining -= got;
     available = file.available();
-  }
+  }*/
+  int got = file.readBytesUntil('\0', buffer_in + starting_len,
+                                min((buffer_in_len - starting_len -1), available));
+  buffer_in[starting_len + got] = '\0';
 
-  return ((available > 0) || (strnlen(buffer, buffer_size) > 0));
+  return ((available > 0) || (strnlen(buffer_in, buffer_in_len) > 0));
 }
 
 void HttpServer::fileClose(){
@@ -721,88 +707,179 @@ bool CompileMustache::myMemmove(char* destination, char* source, int len){
   return true;
 }
 
-int CompileMustache::compileChunk(char* buffer_head, int len){
-  char* tag_start = findPattern(buffer_head, "{{", len +1);
+void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
+                                  char* buffer_out, int& buffer_out_len,
+                                  int& list_depth, bool& parsing_list)
+{
+  Serial.print("bi |");
+  Serial.println(buffer_in);
 
-  if(!tag_start){
-    // No tags so indicate the whole len can be operated on.
-    return min(len, strlen(buffer_head));
-  } else if(buffer_head + len - tag_start > 64) {
-    // Can operate on everything up to the start of any subsequent tag.
-    char* tag_end = parseTag(buffer_head, len);
-    if(!tag_end){
-      return 0;
-    }
-    char* second_tag = findPattern(tag_end, "{{", (len - (tag_start - buffer_head) +1), false);
-    if(second_tag){
-      // Return length to start of next tag.
-      return second_tag - buffer_head;
-    }
-    // No other tag in range so return length to the end of the first tag if it
-    // extends past the buffer section we were looking in.
-    return max((tag_end - buffer_head), len);
-  }
-  // There is a tag but it overlaps the end of len.
-  // Process everything up to the start of the tag.
-  return tag_start - buffer_head -1;
-}
-
-char* CompileMustache::parseTag(char* buff, int line_len){
-  char tag[64] = "";
-  char tag_content[128] = "";
+  buffer_out[0] = '\0';
+  char tag[TAG_NAME_LEN];
   tagType type;
-  char* tag_start = findPattern(buff, "{{", line_len);
-  if(tag_start){
-    bool found_tag = tagName(tag_start, tag, type);
-    if(!success){
-      return NULL;
-    }
 
-    if(found_tag){
-      if(!success || !replaceTag(tag_start, tag, tag_content, type)){
-        return NULL;
+  char* buffer_tail = buffer_in;
+
+  while(strlen(buffer_out) < buffer_out_len -1 && strlen(buffer_tail)){
+    char* tag_start = findPattern(buffer_tail, "{{",
+        min((strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -2),
+          (buffer_out_len - strlen(buffer_out) -1)), false);
+
+    if(parsing_list){
+      // In process of copying to separate list buffer.
+      Serial.println(0);
+      char* close_tag = findClosingTag(buffer_tail,
+          buffer_in + buffer_in_len - buffer_tail,
+          list_template[list_depth].tag);
+
+      int len;
+      if(close_tag){
+        len = close_tag - buffer_tail;
+      } else {
+        len = buffer_in_len;
       }
-      switch(type)
-      {
-        case tagList:
-          list_depth++;
-          if(list_depth < MAX_LIST_RECURSION){
-            list_element[list_depth] = -1;
-            list_size[list_depth] = -1;
-            //Serial.print("######## ");
-            //Serial.print(list_depth);
-            //Serial.print(" ");
-            //Serial.println(tag);
-            strncat(list_parent, "|", strlen(list_parent) - 1);
-            strncat(list_parent, tag, strlen(list_parent) - strlen(tag));
-            list_parent[128] = '\0';
-          }
-          return tag_start;
-        case tagEnd:
-          if(list_depth > 0){
-            list_depth--;
-            //Serial.print("//////// ");
-            //Serial.print(list_depth);
-            //Serial.print(" ");
-            //Serial.println(tag);
-            char* deliminator = strrchr(list_parent, '|');
-            *deliminator = '\0';
-          } else {
-            Serial.println("Warning: Closing list tag that was never opened.");
-          }
-          return tag_start;
-        default:
-          return tag_start + strlen(tag_content);
+
+      list_template[list_depth].buffer =
+        (char*)realloc((void*)list_template[list_depth].buffer,
+            list_template[list_depth].buffer_len + len);
+      list_template[list_depth].buffer_len = list_template[list_depth].buffer_len + len;
+      strncat(list_template[list_depth].buffer, buffer_tail, len);
+
+      if(!close_tag){
+        buffer_tail = buffer_in + buffer_in_len;
+        buffer_tail[0] = '\0';
+        break;
       }
+
+      Serial.print("bt |");
+      Serial.println(list_template[list_depth].buffer);
+
+      Serial.println("~~~~~~~~~~~~~~~~~~~");
+      bool parsing_list_inner = false;
+      parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
+          buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+      Serial.println("~~~~~~~~~~~~~~~~~~~");
+
+      free(list_template[list_depth].buffer);
+      list_template[list_depth].buffer = NULL;
+      list_depth--;
+      parsing_list = false;
+
+      //buffer_tail += len + strlen(list_template[list_depth].tag) + strlen("{{/}}");
+      buffer_tail = close_tag + strlen(tag) + strlen("{{/}}") +1;
+    } else if(tag_start && tagName(tag_start, tag, type)){
+      // {{tag}} found.
+      Serial.println(1);
+      int l = min((buffer_out_len - strlen(buffer_out) -1), (tag_start - buffer_tail));
+      strncat(buffer_out, buffer_tail, l);
+
+      Serial.print("tag: ");
+      Serial.print(tag);
+      Serial.print(" ");
+      Serial.println((int)type);
+
+      if(type == tagPlain){
+        Serial.println(1.1);
+        strncat(buffer_out, "TAG", (buffer_out_len - strlen(buffer_out) -1));
+        buffer_tail += l + strlen(tag) + strlen("{{}}");
+      } else if(type == tagList){
+        Serial.println(1.2);
+
+        Serial.print("bt |");
+        Serial.println(buffer_tail);
+        Serial.println(buffer_in + buffer_in_len - buffer_tail);
+        Serial.println(tag);
+        char* close_tag =
+          findClosingTag(buffer_tail, buffer_in + buffer_in_len - buffer_tail, tag);
+
+        parsing_list = true;
+        list_depth++;
+        int len;
+        if(close_tag){
+          len = close_tag - (tag_start + strlen(tag) + strlen("{{#}}"));
+        } else {
+          len = 
+            buffer_in + buffer_in_len - (tag_start + strlen(tag) + strlen("{{#}}"));
+        }
+
+        list_template[list_depth].buffer = (char*)malloc(len +1);
+        list_template[list_depth].buffer_len = len +1;
+        strncpy(list_template[list_depth].buffer,
+            tag_start + strlen(tag) + strlen("{{#}}"), len);
+        list_template[list_depth].buffer[len] = '\0';
+
+        if(!close_tag){
+          buffer_tail = buffer_in + buffer_in_len -1;
+          strncpy(list_template[list_depth].tag, tag, TAG_NAME_LEN);
+          Serial.println(1.21);
+          break;
+        }
+
+        Serial.print("bt |");
+        Serial.println(list_template[list_depth].buffer);
+
+        free(list_template[list_depth].buffer);
+        list_template[list_depth].buffer = NULL;
+        list_depth--;
+        parsing_list = false;
+
+        buffer_tail = close_tag + strlen(tag) + strlen("{{/}}");
+
+        Serial.println(1.22);
+      } else if(type == tagInverted){
+        // TODO.
+      } else if(type == tagEnd){
+        // TODO.
+      }
+    } else if(tag_start &&
+        tag_start >= (buffer_in + buffer_in_len - TAG_NAME_LEN - strlen("{{#}}")))
+    {
+      // File content with no {{tag}} followed by a {{tag}} near the end.
+      // Since the {{tag}} is possibly not completely in the buffer_in, only
+      // process everything until {{tag}}.
+      Serial.println(2);
+      int l = min((buffer_out_len - strlen(buffer_out) -1), tag_start - buffer_tail);
+      if(l <= 0){
+        break;
+      }
+      strncat(buffer_out, buffer_tail, l);
+      buffer_tail += l;
+    } else {
+      // No {{tag}} in buffer_in. Copy everything to buffer_out.
+      Serial.println(3);
+      int l = min((buffer_out_len - strlen(buffer_out) -1), strlen(buffer_tail));
+      strncat(buffer_out, buffer_tail, l);
+      buffer_tail += l;
     }
-    return tag_start + strlen("{{");
+    Serial.print("|| |");
+    Serial.println(buffer_tail);
   }
-  return NULL;
+
+  memmove(buffer_in, buffer_tail, strlen(buffer_tail) +1);
+
+  Serial.print("bo |");
+  Serial.println(buffer_out);
 }
+
+char* CompileMustache::findClosingTag(char* buffer_in, const int buffer_in_len,
+                                      const char* tag)
+{
+  char full_tag[TAG_NAME_LEN + strlen("{{/}}")];
+  strcat(full_tag, "{{/");
+  strcat(full_tag, tag);
+  strcat(full_tag, "}}");
+  return findPattern(buffer_in, full_tag, buffer_in_len, false);
+}
+
 
 bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
   type = tagUnset;
-  for(int i = 0; i < 100; i++){
+  if(!tag_start || tag_start[0] != '{' || tag_start[1] != '{'){
+    return false;
+  }
+  tag_start += 2;
+
+  for(int i = 0; i < TAG_NAME_LEN; i++){
     // Skip through any "{{" deliminators and whitespace to start of tag name.
     if(*tag_start >= '!' and *tag_start <= 'z' and
         *tag_start != '#' and *tag_start != '/' and
@@ -834,9 +911,9 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
     type = tagPlain;
   }
 
-  if(findPattern(tag_start, "}}", 64)){
-    strncpy(tag, tag_start, 64);
-    char* end_pattern = findPattern(tag, "}}", 64, false);
+  if(findPattern(tag_start, "}}", TAG_NAME_LEN, false)){
+    strncpy(tag, tag_start, TAG_NAME_LEN);
+    char* end_pattern = findPattern(tag, "}}", TAG_NAME_LEN, false);
     if(end_pattern){
       *end_pattern = '\0';
       while(strlen(tag)){
@@ -861,7 +938,7 @@ bool CompileMustache::duplicateList(char* tag_start_buf, const char* tag, const 
     return false;
   }
 
-  tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
+  tag_start_buf += strnlen(tag, TAG_NAME_LEN) + strlen("{{#}}"); // End of start tag.
   
   // Find the end of the list-item we want to duplicate.
   char end_tag[69];
@@ -907,7 +984,7 @@ bool CompileMustache::duplicateList(char* tag_start_buf, const char* tag, const 
 }
 
 bool CompileMustache::removeList(char* tag_start_buf, const char* tag){
-  tag_start_buf += strnlen(tag, 64) + strlen("{{#}}"); // End of start tag.
+  tag_start_buf += strnlen(tag, TAG_NAME_LEN) + strlen("{{#}}"); // End of start tag.
 
   char end_tag[69];
   end_tag[0] = '\0';

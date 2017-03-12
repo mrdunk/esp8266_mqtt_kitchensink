@@ -26,6 +26,8 @@
 #include "host_attributes.h"
 #include "mdns_actions.h"
 
+#define TAG_NAME_LEN 64
+
 enum tagType{
   tagUnset,
   tagPlain,
@@ -33,6 +35,12 @@ enum tagType{
   tagInverted,
   tagEnd,
   tagListItem
+};
+
+struct List{
+  char* buffer;
+  int buffer_len;
+  char tag[TAG_NAME_LEN];
 };
 
 
@@ -61,15 +69,14 @@ class CompileMustache{
                   Mqtt* _mqtt,
                   Io* _io);
 
-  int compileChunk(char* buffer_head, int len);
-
-  /* Search through buffer for a {{tag}} for line_len characters.
-   * Returns: Pointer in buffer to end of first matching {{tag}}. */
-  char* parseTag(char* line, int line_len);
+  void parseBuffer(char* buffer_in, const int buffer_in_len,
+                   char* buffer_out, int& buffer_out_len,
+                   int& list_depth, bool& parsing_list);
 
   /* Find a set of characters within buffer.
    * Returns: Pointer in buffer to start of first match. */
   char* findPattern(char* buff, const char* pattern, int line_len, bool test=true) const;
+  char* findClosingTag(char* buffer_in, const int buffer_in_len, const char* tag);
 
   /* Replace a {{tag}} with the string in tag_content. */
   bool replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
@@ -81,10 +88,6 @@ class CompileMustache{
 
   bool duplicateList(char* tag_start, const char* tag, const int number);
   bool removeList(char* tag_start_buf, const char* tag);
-
-  bool isClean(){
-    return success;
-  }
 
  private:
   bool success;
@@ -105,6 +108,10 @@ class CompileMustache{
   char list_parent[128];
   
   bool myMemmove(char* destination, char* source, int len);
+
+  //char* list_template[MAX_LIST_RECURSION];
+  //int list_template_len[MAX_LIST_RECURSION];
+  List list_template[MAX_LIST_RECURSION];
 };
 
 
@@ -131,7 +138,7 @@ class HttpServer{
   void onSet();
   void onReset();
   bool fileOpen(const String& filename);
-  bool fileRead();
+  bool fileRead(char* buffer_in, const int buffer_in_len);
   void fileClose();
   File file;
   char* buffer;
