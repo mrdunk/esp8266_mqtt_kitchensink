@@ -206,12 +206,14 @@ void HttpServer::onFileOperations(const String& _filename){
       int buffer_out_len = 2000;
       char* buffer_out = (char*)malloc(buffer_out_len);
       buffer_in[0] = '\0';
+      buffer_out[0] = '\0';
       while(fileRead(buffer_in, buffer_in_len)){
         Serial.println("-----------------------");
         compileMustache.parseBuffer(buffer_in, buffer_in_len,
                                     buffer_out, buffer_out_len,
                                     list_depth, parsing_list);
         esp8266_http_server.sendContent(buffer_out);
+        buffer_out[0] = '\0';
       }
       free(buffer_in);
       free(buffer_out);
@@ -714,7 +716,7 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
   Serial.print("bi |");
   Serial.println(buffer_in);
 
-  buffer_out[0] = '\0';
+  //buffer_out[0] = '\0';
   char tag[TAG_NAME_LEN];
   tagType type;
 
@@ -722,12 +724,13 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
 
   while(strlen(buffer_out) < buffer_out_len -1 && strlen(buffer_tail)){
     char* tag_start = findPattern(buffer_tail, "{{",
-        min((strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -2),
+        min((strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -1),
           (buffer_out_len - strlen(buffer_out) -1)), false);
 
     if(parsing_list){
       // In process of copying to separate list buffer.
       Serial.println(0);
+
       char* close_tag = findClosingTag(buffer_tail,
           buffer_in + buffer_in_len - buffer_tail,
           list_template[list_depth].tag);
@@ -736,37 +739,68 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
       if(close_tag){
         len = close_tag - buffer_tail;
       } else {
+        char* last_tag_start = tag_start;
+        char* tmp_last_tag_start = tag_start;
+
+        while(tmp_last_tag_start){
+          tmp_last_tag_start =
+            findPattern(tmp_last_tag_start +1, "{{",
+                        strnlen(tmp_last_tag_start +1, 
+                                buffer_in + buffer_in_len - tmp_last_tag_start -1),
+                        false);
+          if(tmp_last_tag_start){
+            last_tag_start = tmp_last_tag_start;
+          }
+        }
+        
         len = buffer_in_len;
+        if(last_tag_start && 
+            !findPattern(last_tag_start +1, "}}",
+                         strnlen(last_tag_start +1,
+                                buffer_in + buffer_in_len - tmp_last_tag_start -1),
+                         false))
+        {
+          // The closing tag overlaps buffer boundary.
+          len = last_tag_start - buffer_in;
+        }
       }
 
+      list_template[list_depth].buffer_len = list_template[list_depth].buffer_len + len;
       list_template[list_depth].buffer =
         (char*)realloc((void*)list_template[list_depth].buffer,
-            list_template[list_depth].buffer_len + len);
-      list_template[list_depth].buffer_len = list_template[list_depth].buffer_len + len;
+            list_template[list_depth].buffer_len);
       strncat(list_template[list_depth].buffer, buffer_tail, len);
 
       if(!close_tag){
-        buffer_tail = buffer_in + buffer_in_len;
-        buffer_tail[0] = '\0';
+        buffer_tail += len;
+        if(len == buffer_in_len){
+          // Whole buffer is added to list_template[list_depth].buffer.
+          buffer_tail[0] = '\0';
+        }
+        Serial.print("** |");
+        Serial.println(buffer_tail);
         break;
       }
 
       Serial.print("bt |");
       Serial.println(list_template[list_depth].buffer);
 
+      Serial.print("+");
+      Serial.print(list_depth);
       Serial.println("~~~~~~~~~~~~~~~~~~~");
       bool parsing_list_inner = false;
       parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
           buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+      Serial.print("-");
+      Serial.print(list_depth);
       Serial.println("~~~~~~~~~~~~~~~~~~~");
 
+      buffer_tail = close_tag + strlen(list_template[list_depth].tag) + strlen("{{/}}");
+      
       free(list_template[list_depth].buffer);
       list_template[list_depth].buffer = NULL;
       list_depth--;
       parsing_list = false;
-
-      //buffer_tail += len + strlen(list_template[list_depth].tag) + strlen("{{/}}");
-      buffer_tail = close_tag + strlen(tag) + strlen("{{/}}") +1;
     } else if(tag_start && tagName(tag_start, tag, type)){
       // {{tag}} found.
       Serial.println(1);
@@ -782,13 +816,13 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
         Serial.println(1.1);
         strncat(buffer_out, "TAG", (buffer_out_len - strlen(buffer_out) -1));
         buffer_tail += l + strlen(tag) + strlen("{{}}");
-      } else if(type == tagList){
+      } else if(type == tagList || type == tagInverted){
         Serial.println(1.2);
+Serial.print("|| |");
+Serial.println(buffer_tail);
+Serial.println(buffer_in + buffer_in_len - buffer_tail);
+Serial.println(tag);
 
-        Serial.print("bt |");
-        Serial.println(buffer_tail);
-        Serial.println(buffer_in + buffer_in_len - buffer_tail);
-        Serial.println(tag);
         char* close_tag =
           findClosingTag(buffer_tail, buffer_in + buffer_in_len - buffer_tail, tag);
 
@@ -817,6 +851,17 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
 
         Serial.print("bt |");
         Serial.println(list_template[list_depth].buffer);
+
+      Serial.print("+");
+      Serial.print(list_depth);
+      Serial.println("~~~~~~~~~~~~~~~~~~~");
+      bool parsing_list_inner = false;
+      parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
+          buffer_out, buffer_out_len,
+          list_depth, parsing_list_inner);
+      Serial.print("-");
+      Serial.print(list_depth);
+      Serial.println("~~~~~~~~~~~~~~~~~~~");
 
         free(list_template[list_depth].buffer);
         list_template[list_depth].buffer = NULL;
@@ -851,8 +896,6 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
       strncat(buffer_out, buffer_tail, l);
       buffer_tail += l;
     }
-    Serial.print("|| |");
-    Serial.println(buffer_tail);
   }
 
   memmove(buffer_in, buffer_tail, strlen(buffer_tail) +1);
