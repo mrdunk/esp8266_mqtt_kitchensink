@@ -203,7 +203,7 @@ void HttpServer::onFileOperations(const String& _filename){
       bool parsing_list = false;
       int buffer_in_len = 200;
       char* buffer_in = (char*)malloc(buffer_in_len);
-      int buffer_out_len = 2000;
+      int buffer_out_len = 200;
       char* buffer_out = (char*)malloc(buffer_out_len);
       buffer_in[0] = '\0';
       buffer_out[0] = '\0';
@@ -281,26 +281,6 @@ bool HttpServer::fileOpen(const String& filename){
 bool HttpServer::fileRead(char* buffer_in, const int buffer_in_len){
   int available = file.available();
   int starting_len = strnlen(buffer_in, buffer_in_len);
-  /*char* buffer_tail = buffer_in + strnlen(buffer_in, buffer_in_len);
-  int buffer_remaining = (buffer_in_len /2) - strlen(buffer_in);
-  while(available) {
-    int got = file.readBytesUntil('\n', buffer_tail, min(buffer_remaining, available));
-    buffer_tail[got] = '\0';
-
-    if(buffer_tail[got -1] != 13 || got == 0){
-      Serial.print("break ");
-      Serial.print(strlen(buffer_in));
-      Serial.print(" ");
-      Serial.println(available);
-      Serial.println(buffer_in);
-      buffer_tail[0] = '\0';
-      file.seek(-got, SeekCur);
-      break;
-    }
-    buffer_tail += got;
-    buffer_remaining -= got;
-    available = file.available();
-  }*/
   int got = file.readBytesUntil('\0', buffer_in + starting_len,
                                 min((buffer_in_len - starting_len -1), available));
   buffer_in[starting_len + got] = '\0';
@@ -709,14 +689,17 @@ bool CompileMustache::myMemmove(char* destination, char* source, int len){
   return true;
 }
 
-void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
-                                  char* buffer_out, int& buffer_out_len,
+void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
+                                  char*& buffer_out, int& buffer_out_len,
                                   int& list_depth, bool& parsing_list)
 {
+  Serial.print("d  |");
+  Serial.print(list_depth);
+  Serial.print(" ");
+  Serial.println((int)parsing_list);
   Serial.print("bi |");
   Serial.println(buffer_in);
 
-  //buffer_out[0] = '\0';
   char tag[TAG_NAME_LEN];
   tagType type;
 
@@ -724,8 +707,11 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
 
   while(strlen(buffer_out) < buffer_out_len -1 && strlen(buffer_tail)){
     char* tag_start = findPattern(buffer_tail, "{{",
-        min((strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -1),
-          (buffer_out_len - strlen(buffer_out) -1)), false);
+        strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -1);
+    if(!tag_start && *(buffer_tail + strlen(buffer_tail) -1) == '{'){
+      // Special case where last character is the start of a tag.
+      tag_start = buffer_tail + strlen(buffer_tail) -1;
+    }
 
     if(parsing_list){
       // In process of copying to separate list buffer.
@@ -746,8 +732,7 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
           tmp_last_tag_start =
             findPattern(tmp_last_tag_start +1, "{{",
                         strnlen(tmp_last_tag_start +1, 
-                                buffer_in + buffer_in_len - tmp_last_tag_start -1),
-                        false);
+                                buffer_in + buffer_in_len - tmp_last_tag_start -1));
           if(tmp_last_tag_start){
             last_tag_start = tmp_last_tag_start;
           }
@@ -757,8 +742,7 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
         if(last_tag_start && 
             !findPattern(last_tag_start +1, "}}",
                          strnlen(last_tag_start +1,
-                                buffer_in + buffer_in_len - tmp_last_tag_start -1),
-                         false))
+                                buffer_in + buffer_in_len - tmp_last_tag_start -1)))
         {
           // The closing tag overlaps buffer boundary.
           len = last_tag_start - buffer_in;
@@ -777,20 +761,25 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
           // Whole buffer is added to list_template[list_depth].buffer.
           buffer_tail[0] = '\0';
         }
-        Serial.print("** |");
-        Serial.println(buffer_tail);
         break;
       }
 
-      Serial.print("bt |");
-      Serial.println(list_template[list_depth].buffer);
+      char tag_content[128];
+      int itterator = 0;
+      int element_count = 0;
+      replaceTag2(tag_content, itterator, element_count,
+                  list_template[list_depth].tag, tagList, 128);
 
       Serial.print("+");
       Serial.print(list_depth);
       Serial.println("~~~~~~~~~~~~~~~~~~~");
-      bool parsing_list_inner = false;
-      parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
-          buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+      //Serial.print("bt |");
+      //Serial.println(list_template[list_depth].buffer);
+      for(int i = 0; i < element_count; i++){
+        bool parsing_list_inner = false;
+        parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
+            buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+      }
       Serial.print("-");
       Serial.print(list_depth);
       Serial.println("~~~~~~~~~~~~~~~~~~~");
@@ -801,27 +790,48 @@ void CompileMustache::parseBuffer(char* buffer_in, const int buffer_in_len,
       list_template[list_depth].buffer = NULL;
       list_depth--;
       parsing_list = false;
+        
     } else if(tag_start && tagName(tag_start, tag, type)){
       // {{tag}} found.
       Serial.println(1);
-      int l = min((buffer_out_len - strlen(buffer_out) -1), (tag_start - buffer_tail));
-      strncat(buffer_out, buffer_tail, l);
+
+      int len_to_tag = tag_start - buffer_tail;
+      int len_buff_space = buffer_out_len - strlen(buffer_out) -1;
+      if(len_to_tag > len_buff_space){
+        // Only enough space in output buffer for content before {{tag}}.
+        buffer_out_len += len_to_tag + TAG_NAME_LEN;
+        buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
+      }
+
+      strncat(buffer_out, buffer_tail, len_to_tag);
+      len_buff_space -= len_to_tag;
 
       Serial.print("tag: ");
       Serial.print(tag);
       Serial.print(" ");
       Serial.println((int)type);
+      Serial.print("b~ |");
+      Serial.println(buffer_tail);
+
+      char tag_content[128];
+      int itterator = 0;
+      int element_count = 0;
+      replaceTag2(tag_content, itterator, element_count, tag, type, 128);
 
       if(type == tagPlain){
         Serial.println(1.1);
-        strncat(buffer_out, "TAG", (buffer_out_len - strlen(buffer_out) -1));
-        buffer_tail += l + strlen(tag) + strlen("{{}}");
+        if(strlen(tag_content) > len_buff_space){
+          // TODO
+          Serial.println("BREAK!!!");
+          break;
+        }
+        strncat(buffer_out, tag_content, len_buff_space);
+        buffer_tail += len_to_tag + strnlen(tag, 128) + strlen("{{}}");
       } else if(type == tagList || type == tagInverted){
         Serial.println(1.2);
-Serial.print("|| |");
-Serial.println(buffer_tail);
-Serial.println(buffer_in + buffer_in_len - buffer_tail);
-Serial.println(tag);
+        Serial.println((int)buffer_tail);
+        Serial.println((int)(buffer_in + buffer_in_len - buffer_tail));
+        Serial.println(tag);
 
         char* close_tag =
           findClosingTag(buffer_tail, buffer_in + buffer_in_len - buffer_tail, tag);
@@ -843,25 +853,25 @@ Serial.println(tag);
         list_template[list_depth].buffer[len] = '\0';
 
         if(!close_tag){
+          Serial.println(1.21);
           buffer_tail = buffer_in + buffer_in_len -1;
           strncpy(list_template[list_depth].tag, tag, TAG_NAME_LEN);
-          Serial.println(1.21);
           break;
         }
+        Serial.println(1.22);
 
-        Serial.print("bt |");
-        Serial.println(list_template[list_depth].buffer);
-
-      Serial.print("+");
-      Serial.print(list_depth);
-      Serial.println("~~~~~~~~~~~~~~~~~~~");
-      bool parsing_list_inner = false;
-      parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
-          buffer_out, buffer_out_len,
-          list_depth, parsing_list_inner);
-      Serial.print("-");
-      Serial.print(list_depth);
-      Serial.println("~~~~~~~~~~~~~~~~~~~");
+        Serial.print("+");
+        Serial.print(list_depth);
+        Serial.println("~~~~~~~~~~~~~~~~~~~");
+        for(int i = 0; i < element_count; i++){
+          bool parsing_list_inner = false;
+          parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
+              buffer_out, buffer_out_len,
+              list_depth, parsing_list_inner);
+        }
+        Serial.print("-");
+        Serial.print(list_depth);
+        Serial.println("~~~~~~~~~~~~~~~~~~~");
 
         free(list_template[list_depth].buffer);
         list_template[list_depth].buffer = NULL;
@@ -870,7 +880,6 @@ Serial.println(tag);
 
         buffer_tail = close_tag + strlen(tag) + strlen("{{/}}");
 
-        Serial.println(1.22);
       } else if(type == tagInverted){
         // TODO.
       } else if(type == tagEnd){
@@ -881,25 +890,36 @@ Serial.println(tag);
     {
       // File content with no {{tag}} followed by a {{tag}} near the end.
       // Since the {{tag}} is possibly not completely in the buffer_in, only
-      // process everything until {{tag}}.
+      // process everything up to {{tag}}.
       Serial.println(2);
-      int l = min((buffer_out_len - strlen(buffer_out) -1), tag_start - buffer_tail);
-      if(l <= 0){
+      if(tag_start - buffer_tail <= 0){
+        // All data worth sending has been added to buffer_out.
         break;
       }
-      strncat(buffer_out, buffer_tail, l);
-      buffer_tail += l;
+      if(tag_start - buffer_tail > buffer_out_len - strlen(buffer_out) -1){
+        buffer_out_len += tag_start - buffer_tail;
+        buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
+      }
+      strncat(buffer_out, buffer_tail, tag_start - buffer_tail);
+      buffer_tail += tag_start - buffer_tail;
     } else {
       // No {{tag}} in buffer_in. Copy everything to buffer_out.
-      Serial.println(3);
-      int l = min((buffer_out_len - strlen(buffer_out) -1), strlen(buffer_tail));
-      strncat(buffer_out, buffer_tail, l);
-      buffer_tail += l;
+      Serial.println(4);
+      if(strlen(buffer_tail) > buffer_out_len - strlen(buffer_out) -1){
+        buffer_out_len += strlen(buffer_tail);
+        buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
+      }
+      strncat(buffer_out, buffer_tail, strlen(buffer_tail));
+      buffer_tail += strlen(buffer_tail);
     }
   }
 
   memmove(buffer_in, buffer_tail, strlen(buffer_tail) +1);
 
+  Serial.print("d  |");
+  Serial.print(list_depth);
+  Serial.print(" ");
+  Serial.println((int)parsing_list);
   Serial.print("bo |");
   Serial.println(buffer_out);
 }
@@ -911,7 +931,7 @@ char* CompileMustache::findClosingTag(char* buffer_in, const int buffer_in_len,
   strcat(full_tag, "{{/");
   strcat(full_tag, tag);
   strcat(full_tag, "}}");
-  return findPattern(buffer_in, full_tag, buffer_in_len, false);
+  return findPattern(buffer_in, full_tag, buffer_in_len);
 }
 
 
@@ -954,9 +974,9 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
     type = tagPlain;
   }
 
-  if(findPattern(tag_start, "}}", TAG_NAME_LEN, false)){
+  if(findPattern(tag_start, "}}", TAG_NAME_LEN)){
     strncpy(tag, tag_start, TAG_NAME_LEN);
-    char* end_pattern = findPattern(tag, "}}", TAG_NAME_LEN, false);
+    char* end_pattern = findPattern(tag, "}}", TAG_NAME_LEN);
     if(end_pattern){
       *end_pattern = '\0';
       while(strlen(tag)){
@@ -1046,10 +1066,183 @@ bool CompileMustache::removeList(char* tag_start_buf, const char* tag){
   return success;
 }
 
+bool CompileMustache::replaceTag2(char* destination,
+                                  int& itterator,
+                                  int& element_count,
+                                  const char* tag,
+                                  const tagType type,
+                                  const int len)
+{
+  memset(destination, '\0', len);
+  element_count = 0;
+  if(strcmp(tag, "host.mac") == 0){
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    String mac_str = macToStr(mac);
+    mac_str.toCharArray(destination, len);
+    element_count = 1;
+  } else if(strcmp(tag, "config.hostname") == 0){
+    strncpy(destination, config->hostname, min(HOSTNAME_LEN, len));
+    element_count = (bool)strlen(destination);
+  } else if(strcmp(tag, "host.ip") == 0){
+    ip_to_string(WiFi.localIP()).toCharArray(destination, len);
+    element_count = (bool)WiFi.localIP();
+  } else if(strcmp(tag, "config.ip") == 0){
+    ip_to_string(config->ip).toCharArray(destination, len);
+    element_count = (bool)config->ip;
+  } else if(strcmp(tag, "config.subnet") == 0){
+    ip_to_string(config->subnet).toCharArray(destination, len);
+    element_count = (bool)config->subnet;
+  } else if(strcmp(tag, "config.gateway") == 0){
+    ip_to_string(config->gateway).toCharArray(destination, len);
+    element_count = (bool)config->gateway;
+  } else if(strcmp(tag, "config.brokerip") == 0){
+    ip_to_string(config->brokerip).toCharArray(destination, len);
+    element_count = (bool)config->brokerip;
+  } else if(strcmp(tag, "config.brokerport") == 0){
+    String(config->brokerport).toCharArray(destination, len);
+    element_count = config->brokerport > 0;
+  } else if(strcmp(tag, "config.subscribeprefix") == 0){
+    String(config->subscribeprefix).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "config.publishprefix") == 0){
+    String(config->publishprefix).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "config.firmwarehost") == 0){
+    String(config->firmwarehost).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "config.firmwaredirectory") == 0){
+    String(config->firmwaredirectory).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "config.firmwareport") == 0){
+    String(config->firmwareport).toCharArray(destination, len);
+    element_count = config->firmwareport > 0;
+  } else if(strcmp(tag, "config.enablepassphrase") == 0){
+    String(config->enablepassphrase).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "host.rssi") == 0){
+    String(WiFi.RSSI()).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "host.cpu_freqency") == 0){
+    String(ESP.getCpuFreqMHz()).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "host.flash_size") == 0){
+    String(ESP.getFlashChipSize()).toCharArray(destination, len);
+    element_count = ESP.getFlashChipSize() > 0;
+  } else if(strcmp(tag, "host.flash_space") == 0){
+    String(ESP.getFreeSketchSpace()).toCharArray(destination, len);
+    element_count = ESP.getFreeSketchSpace() > 0;
+  } else if(strcmp(tag, "host.flash_ratio") == 0){
+    element_count = 0;
+    if(ESP.getFlashChipSize() > 0){
+      String(int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()))
+        .toCharArray(destination, len);
+      element_count = (100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()) >= 1;
+    }
+  } else if(strcmp(tag, "host.flash_speed") == 0){
+    String(ESP.getFlashChipSpeed()).toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "host.free_memory") == 0){
+    String(ESP.getFreeHeap()).toCharArray(destination, len);
+    element_count = ESP.getFreeHeap() >= 1;
+  } else if(strcmp(tag, "host.sdk_version") == 0){
+    strncpy(destination, ESP.getSdkVersion(), len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "host.core_version") == 0){
+    ESP.getCoreVersion().toCharArray(destination, len);
+    element_count = (bool)strnlen(destination, len);
+  } else if(strcmp(tag, "io.analogue_in") == 0){
+    int val = analogRead(A0);
+    String(val).toCharArray(destination, len);
+    element_count = val > 0;
+  } else if(strcmp(tag, "host.uptime") == 0){
+    String(millis() / 1000).toCharArray(destination, len);
+    element_count = (millis() / 1000) >= 10;
+  } else if(strcmp(tag, "host.buffer_size") == 0){
+    String(buffer_size).toCharArray(destination, len);
+    element_count = buffer_size > 0;
+  } else if(strcmp(tag, "mdns.packet_count") == 0){
+    String(mdns->packet_count).toCharArray(destination, len);
+    element_count = mdns->packet_count > 0;
+  } else if(strcmp(tag, "mdns.buffer_fail") == 0){
+    String(mdns->buffer_size_fail).toCharArray(destination, len);
+    element_count = mdns->buffer_size_fail >= 0;
+  } else if(strcmp(tag, "mdns.buffer_sucess") == 0){
+    String(mdns->packet_count - mdns->buffer_size_fail).toCharArray(destination, len);
+    element_count = (mdns->packet_count - mdns->buffer_size_fail) > 0;
+  } else if(strcmp(tag, "mdns.largest_packet_seen") == 0){
+    String(mdns->largest_packet_seen).toCharArray(destination, len);
+    element_count = mdns->largest_packet_seen > 0;
+  } else if(strcmp(tag, "mdns.success_rate") == 0){
+    element_count = 0;
+    if(mdns->packet_count > 0){
+      String(100 - (100 * mdns->buffer_size_fail / mdns->packet_count))
+        .toCharArray(destination, len);
+      element_count = (100 * mdns->buffer_size_fail / mdns->packet_count) >= 1;
+    }
+  
+  } else if(strcmp(tag, "fs.files") == 0){
+    unsigned int now = millis() / 10000;  // 10 Second intervals.
+    if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
+      list_cache_time[list_depth] = now;
+      list_size[list_depth] = 0;
+    
+      Dir dir = SPIFFS.openDir("/");
+      while(dir.next()){
+        list_size[list_depth]++;
+      }
+    }
+    if(type == tagListItem){
+      list_element[list_depth]++;
+    } else {
+      list_element[list_depth] = 0;
+      String(list_size[list_depth]).toCharArray(destination, len);
+      element_count = list_size[list_depth];
+    }
+  } else if(strcmp(tag, "fs.space.used") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    String(fs_info.usedBytes).toCharArray(destination, len);
+    element_count = fs_info.usedBytes > 0;
+  } else if(strcmp(tag, "fs.space.size") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    String(fs_info.totalBytes).toCharArray(destination, len);
+    element_count = fs_info.totalBytes > 0;
+  } else if(strcmp(tag, "fs.space.remaining") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    String(fs_info.totalBytes - fs_info.usedBytes).toCharArray(destination, len);
+    element_count = (fs_info.totalBytes - fs_info.usedBytes) > 0;
+  } else if(strcmp(tag, "fs.space.ratio.used") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    if(fs_info.totalBytes > 0){
+      String(100.0 * fs_info.usedBytes / fs_info.totalBytes).toCharArray(destination, len);
+      element_count = (100.0 * fs_info.usedBytes / fs_info.totalBytes) >= 1;
+    }
+  } else if(strcmp(tag, "fs.space.ratio.remaining") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    if(fs_info.totalBytes > 0){
+      String(100.0 * (fs_info.totalBytes - fs_info.usedBytes) / fs_info.totalBytes)
+        .toCharArray(destination, len);
+      element_count =
+        (100.0 * (fs_info.totalBytes - fs_info.usedBytes) / fs_info.totalBytes) >= 1;
+    }
+  } else if(strcmp(tag, "fs.max_filename_len") == 0){
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    String(fs_info.maxPathLength -2).toCharArray(destination, len);
+  }
+}
+
+
+
 bool CompileMustache::replaceTag(char* tag_position, 
-                                 const char* tag,
-                                 char* tag_content,
-                                 tagType type)
+    const char* tag,
+    char* tag_content,
+    tagType type)
 {
   //Serial.print("tag: ");
   //Serial.print(tag);
@@ -1495,20 +1688,9 @@ bool CompileMustache::replaceTag(char* tag_position,
   return true;
 }
 
-char* CompileMustache::findPattern(char* buff, const char* pattern, int line_len, bool test)
+char* CompileMustache::findPattern(char* buff, const char* pattern, int line_len)
   const{
   for(int i = 0; i < line_len; i++){
-    if(test and ((int)buff + i) > ((int)buffer + buffer_size)){
-      Serial.print("ERROR: over-ran buffer in findPattern() ");
-      Serial.print((int)buff + i);
-      Serial.print(" ");
-      Serial.print((int)buffer + buffer_size);
-      Serial.print(" ");
-      Serial.print(line_len);
-      Serial.print(" ");
-      Serial.println(i);
-      return NULL;
-    }
     if(strncmp (buff + i, pattern, strlen(pattern)) == 0){
       return buff +i;
     }

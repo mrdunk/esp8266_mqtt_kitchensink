@@ -1,0 +1,1 @@
+~/Working/arduino-1.6.13/arduino --verify ~/Working/esp8266_mqtt_kitchensink/esp8266_mqtt_kitchensink.ino --verbose-build --pref build.path=./

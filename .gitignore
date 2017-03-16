@@ -3,5 +3,7 @@
 *.swo
 */3rdparty/
 */3rdparty
+*/build/
+*/build
 secrets.h
 firmware.bin

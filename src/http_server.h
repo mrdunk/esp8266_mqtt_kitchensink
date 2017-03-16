@@ -69,17 +69,23 @@ class CompileMustache{
                   Mqtt* _mqtt,
                   Io* _io);
 
-  void parseBuffer(char* buffer_in, const int buffer_in_len,
-                   char* buffer_out, int& buffer_out_len,
+  void parseBuffer(char* buffer_in, int buffer_in_len,
+                   char*& buffer_out, int& buffer_out_len,
                    int& list_depth, bool& parsing_list);
 
   /* Find a set of characters within buffer.
    * Returns: Pointer in buffer to start of first match. */
-  char* findPattern(char* buff, const char* pattern, int line_len, bool test=true) const;
+  char* findPattern(char* buff, const char* pattern, int line_len) const;
   char* findClosingTag(char* buffer_in, const int buffer_in_len, const char* tag);
 
   /* Replace a {{tag}} with the string in tag_content. */
   bool replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
+  bool replaceTag2(char* destination,
+                   int& itterator,
+                   int& element_count,
+                   const char* tag,
+                   const tagType type,
+                   const int len);
 
   /* Populate tag variable with the contents of a tag in buffer pointed to by
    * tag_position.
@@ -109,8 +115,6 @@ class CompileMustache{
   
   bool myMemmove(char* destination, char* source, int len);
 
-  //char* list_template[MAX_LIST_RECURSION];
-  //int list_template_len[MAX_LIST_RECURSION];
   List list_template[MAX_LIST_RECURSION];
 };
 
