@@ -27,6 +27,7 @@
 #include "mdns_actions.h"
 
 #define TAG_NAME_LEN 64
+#define MAX_LIST_RECURSION 4 
 
 enum tagType{
   tagUnset,
@@ -41,6 +42,8 @@ struct List{
   char* buffer;
   int buffer_len;
   char tag[TAG_NAME_LEN];
+  char parent[(TAG_NAME_LEN * MAX_LIST_RECURSION) + MAX_LIST_RECURSION];
+  bool inverted;
 };
 
 
@@ -85,7 +88,10 @@ class CompileMustache{
                    int& element_count,
                    const char* tag,
                    const tagType type,
-                   const int len);
+                   const int len,
+                   const int list_depth);
+  void enterList(char* parents, char* tag);
+  void exitList(char* parents);
 
   /* Populate tag variable with the contents of a tag in buffer pointed to by
    * tag_position.
@@ -106,11 +112,10 @@ class CompileMustache{
   mdns::MDns* mdns;
   Mqtt* mqtt;
   Io* io;
-#define MAX_LIST_RECURSION 4 
   int list_element[MAX_LIST_RECURSION];  
   int list_size[MAX_LIST_RECURSION];
   int list_cache_time[MAX_LIST_RECURSION];
-  int list_depth;
+  int list_depth;  // TODO remove
   char list_parent[128];
   
   bool myMemmove(char* destination, char* source, int len);

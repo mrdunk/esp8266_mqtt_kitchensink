@@ -98,7 +98,8 @@ void HttpServer::onFileOperations(const String& _filename){
 
   if(filename.length()){
     if(esp8266_http_server.hasArg("action") and 
-          esp8266_http_server.arg("action") == "pull"){
+          esp8266_http_server.arg("action") == "pull")
+    {
       // Pull file from server.
       bufferAppend("Pulling firmware from " +
           String(config->firmwarehost) + ":" + String(config->firmwareport) +
@@ -122,7 +123,8 @@ void HttpServer::onFileOperations(const String& _filename){
         return;
       }
     } else if(esp8266_http_server.hasArg("action") and
-        esp8266_http_server.arg("action") == "del"){
+        esp8266_http_server.arg("action") == "del")
+    {
       bool result = SPIFFS.begin();
       if(!SPIFFS.exists(String("/") + filename)){
         bufferAppend("\nUnsuccessful.\n");
@@ -143,7 +145,8 @@ void HttpServer::onFileOperations(const String& _filename){
       bufferAppend(filename);
       esp8266_http_server.send(200, "text/plain", buffer);
     } else if(esp8266_http_server.hasArg("action") and
-        esp8266_http_server.arg("action") == "raw"){
+        esp8266_http_server.arg("action") == "raw")
+    {
 
       esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
       esp8266_http_server.send(200, "text/plain", "");
@@ -185,7 +188,6 @@ void HttpServer::onFileOperations(const String& _filename){
         esp8266_http_server.sendHeader("Cache-Control", "max-age=3600");
       }
 
-
       if(esp8266_http_server.hasArg("action") and
           esp8266_http_server.arg("action") == "compiled_source"){
         Serial.print("Displaying compiled_source for: ");
@@ -197,26 +199,37 @@ void HttpServer::onFileOperations(const String& _filename){
         esp8266_http_server.send(200, mime(filename), "");
       }
 
-      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
+      if(filename.endsWith(".mustache")){
+        CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
 
-      int list_depth = 0;
-      bool parsing_list = false;
-      int buffer_in_len = 200;
-      char* buffer_in = (char*)malloc(buffer_in_len);
-      int buffer_out_len = 200;
-      char* buffer_out = (char*)malloc(buffer_out_len);
-      buffer_in[0] = '\0';
-      buffer_out[0] = '\0';
-      while(fileRead(buffer_in, buffer_in_len)){
-        Serial.println("-----------------------");
-        compileMustache.parseBuffer(buffer_in, buffer_in_len,
-                                    buffer_out, buffer_out_len,
-                                    list_depth, parsing_list);
-        esp8266_http_server.sendContent(buffer_out);
+        int list_depth = 0;
+        bool parsing_list = false;
+        int buffer_in_len = 500;
+        char* buffer_in = (char*)malloc(buffer_in_len);
+        int buffer_out_len = 1000;
+        char* buffer_out = (char*)malloc(buffer_out_len);
+        buffer_in[0] = '\0';
         buffer_out[0] = '\0';
+        while(fileRead(buffer_in, buffer_in_len)){
+          Serial.println("-----------------------");
+          compileMustache.parseBuffer(buffer_in, buffer_in_len,
+              buffer_out, buffer_out_len,
+              list_depth, parsing_list);
+          if(strlen(buffer_out)){
+            esp8266_http_server.sendContent(buffer_out);
+          }
+          buffer_out[0] = '\0';
+        }
+        free(buffer_in);
+        free(buffer_out);
+      } else {
+        bufferClear();
+        while(fileRead(buffer, buffer_size)){
+          Serial.println(strlen(buffer));
+          esp8266_http_server.sendContent(buffer);
+          bufferClear();
+        }
       }
-      free(buffer_in);
-      free(buffer_out);
 
       esp8266_http_server.sendHeader("Connection", "close");
       fileClose();
@@ -281,6 +294,7 @@ bool HttpServer::fileOpen(const String& filename){
 bool HttpServer::fileRead(char* buffer_in, const int buffer_in_len){
   int available = file.available();
   int starting_len = strnlen(buffer_in, buffer_in_len);
+  
   int got = file.readBytesUntil('\0', buffer_in + starting_len,
                                 min((buffer_in_len - starting_len -1), available));
   buffer_in[starting_len + got] = '\0';
@@ -705,7 +719,8 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
 
   char* buffer_tail = buffer_in;
 
-  while(strlen(buffer_out) < buffer_out_len -1 && strlen(buffer_tail)){
+  while(buffer_out && strlen(buffer_tail)){
+    wdt_reset();
     char* tag_start = findPattern(buffer_tail, "{{",
         strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -1);
     if(!tag_start && *(buffer_tail + strlen(buffer_tail) -1) == '{'){
@@ -715,13 +730,12 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
 
     if(parsing_list){
       // In process of copying to separate list buffer.
-      Serial.println(0);
 
       char* close_tag = findClosingTag(buffer_tail,
           buffer_in + buffer_in_len - buffer_tail,
           list_template[list_depth].tag);
 
-      int len;
+      int len = 0;
       if(close_tag){
         len = close_tag - buffer_tail;
       } else {
@@ -730,37 +744,55 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
 
         while(tmp_last_tag_start){
           tmp_last_tag_start =
-            findPattern(tmp_last_tag_start +1, "{{",
-                        strnlen(tmp_last_tag_start +1, 
-                                buffer_in + buffer_in_len - tmp_last_tag_start -1));
+            findPattern(tmp_last_tag_start +1, "{{", strnlen(tmp_last_tag_start +1, 
+                        buffer_in + buffer_in_len - tmp_last_tag_start -1));
           if(tmp_last_tag_start){
             last_tag_start = tmp_last_tag_start;
           }
         }
         
-        len = buffer_in_len;
+
+        len = strlen(buffer_tail);
         if(last_tag_start && 
-            !findPattern(last_tag_start +1, "}}",
-                         strnlen(last_tag_start +1,
-                                buffer_in + buffer_in_len - tmp_last_tag_start -1)))
+            !findPattern(last_tag_start +1, "}}", strnlen(last_tag_start +1,
+                         buffer_in + buffer_in_len - tmp_last_tag_start -1)))
         {
           // The closing tag overlaps buffer boundary.
-          len = last_tag_start - buffer_in;
+          len = last_tag_start - buffer_tail;
         }
       }
 
-      list_template[list_depth].buffer_len = list_template[list_depth].buffer_len + len;
-      list_template[list_depth].buffer =
-        (char*)realloc((void*)list_template[list_depth].buffer,
-            list_template[list_depth].buffer_len);
+      int len_buff_space =
+          list_template[list_depth].buffer_len - strlen(list_template[list_depth].buffer) -1;
+      if(len > len_buff_space){
+        // Only enough space in output buffer for content before {{tag}}.
+        list_template[list_depth].buffer_len += len;
+        list_template[list_depth].buffer =
+          (char*)realloc((void*)list_template[list_depth].buffer,
+          list_template[list_depth].buffer_len);
+        if(!list_template[list_depth].buffer){
+          Serial.println("ERROR: Failed realloc()");
+          parsing_list = false;
+          break;
+        }
+      }
+
       strncat(list_template[list_depth].buffer, buffer_tail, len);
 
+      Serial.print("bt |");
+      Serial.println(list_template[list_depth].buffer);
+
       if(!close_tag){
-        buffer_tail += len;
-        if(len == buffer_in_len){
+        Serial.println(len);
+        Serial.println(strlen(buffer_tail));
+        if(len == strlen(buffer_tail)){
           // Whole buffer is added to list_template[list_depth].buffer.
+          buffer_tail = buffer_in;
           buffer_tail[0] = '\0';
+        } else {
+          buffer_tail += len;
         }
+
         break;
       }
 
@@ -768,17 +800,29 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       int itterator = 0;
       int element_count = 0;
       replaceTag2(tag_content, itterator, element_count,
-                  list_template[list_depth].tag, tagList, 128);
+                  list_template[list_depth].tag, tagList, 128, list_depth);
+      Serial.print("ec |");
+      Serial.println(element_count);
 
       Serial.print("+");
       Serial.print(list_depth);
       Serial.println("~~~~~~~~~~~~~~~~~~~");
-      //Serial.print("bt |");
-      //Serial.println(list_template[list_depth].buffer);
+
+      if(list_template[list_depth].inverted){
+        element_count = !bool(element_count);
+      }
       for(int i = 0; i < element_count; i++){
+        int tmp_element_count;
+        replaceTag2(tag_content, itterator, tmp_element_count,
+                    list_template[list_depth].tag, tagListItem, 128, list_depth);
+
+        int tmp_buffer_in_len = list_template[list_depth].buffer_len;
+        char* tmp_buffer_in = (char*)malloc(tmp_buffer_in_len);
+        memcpy(tmp_buffer_in, list_template[list_depth].buffer, tmp_buffer_in_len);
         bool parsing_list_inner = false;
-        parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
-            buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+        parseBuffer(tmp_buffer_in, tmp_buffer_in_len,
+                    buffer_out, buffer_out_len, list_depth, parsing_list_inner);
+        free(tmp_buffer_in);
       }
       Serial.print("-");
       Serial.print(list_depth);
@@ -788,6 +832,8 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       
       free(list_template[list_depth].buffer);
       list_template[list_depth].buffer = NULL;
+      list_template[list_depth].buffer_len = 0;
+      exitList(list_parent);
       list_depth--;
       parsing_list = false;
         
@@ -801,6 +847,10 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
         // Only enough space in output buffer for content before {{tag}}.
         buffer_out_len += len_to_tag + TAG_NAME_LEN;
         buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
+        if(!buffer_out){
+          Serial.println("ERROR: Failed realloc()");
+          break;
+        }
       }
 
       strncat(buffer_out, buffer_tail, len_to_tag);
@@ -810,80 +860,36 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       Serial.print(tag);
       Serial.print(" ");
       Serial.println((int)type);
-      Serial.print("b~ |");
-      Serial.println(buffer_tail);
 
       char tag_content[128];
       int itterator = 0;
       int element_count = 0;
-      replaceTag2(tag_content, itterator, element_count, tag, type, 128);
+      replaceTag2(tag_content, itterator, element_count, tag, type, 128, list_depth);
 
       if(type == tagPlain){
         Serial.println(1.1);
         if(strlen(tag_content) > len_buff_space){
-          // TODO
-          Serial.println("BREAK!!!");
-          break;
+          buffer_out_len += strlen(tag_content);
+          buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
         }
         strncat(buffer_out, tag_content, len_buff_space);
         buffer_tail += len_to_tag + strnlen(tag, 128) + strlen("{{}}");
       } else if(type == tagList || type == tagInverted){
         Serial.println(1.2);
-        Serial.println((int)buffer_tail);
-        Serial.println((int)(buffer_in + buffer_in_len - buffer_tail));
-        Serial.println(tag);
-
-        char* close_tag =
-          findClosingTag(buffer_tail, buffer_in + buffer_in_len - buffer_tail, tag);
 
         parsing_list = true;
         list_depth++;
-        int len;
-        if(close_tag){
-          len = close_tag - (tag_start + strlen(tag) + strlen("{{#}}"));
-        } else {
-          len = 
-            buffer_in + buffer_in_len - (tag_start + strlen(tag) + strlen("{{#}}"));
-        }
+        enterList(list_parent, tag);
 
-        list_template[list_depth].buffer = (char*)malloc(len +1);
-        list_template[list_depth].buffer_len = len +1;
-        strncpy(list_template[list_depth].buffer,
-            tag_start + strlen(tag) + strlen("{{#}}"), len);
-        list_template[list_depth].buffer[len] = '\0';
+        Serial.print("d  |");
+        Serial.println(list_depth);
 
-        if(!close_tag){
-          Serial.println(1.21);
-          buffer_tail = buffer_in + buffer_in_len -1;
-          strncpy(list_template[list_depth].tag, tag, TAG_NAME_LEN);
-          break;
-        }
-        Serial.println(1.22);
-
-        Serial.print("+");
-        Serial.print(list_depth);
-        Serial.println("~~~~~~~~~~~~~~~~~~~");
-        for(int i = 0; i < element_count; i++){
-          bool parsing_list_inner = false;
-          parseBuffer(list_template[list_depth].buffer, list_template[list_depth].buffer_len,
-              buffer_out, buffer_out_len,
-              list_depth, parsing_list_inner);
-        }
-        Serial.print("-");
-        Serial.print(list_depth);
-        Serial.println("~~~~~~~~~~~~~~~~~~~");
-
-        free(list_template[list_depth].buffer);
-        list_template[list_depth].buffer = NULL;
-        list_depth--;
-        parsing_list = false;
-
-        buffer_tail = close_tag + strlen(tag) + strlen("{{/}}");
-
-      } else if(type == tagInverted){
-        // TODO.
-      } else if(type == tagEnd){
-        // TODO.
+        strncpy(list_template[list_depth].tag, tag, TAG_NAME_LEN);
+        list_template[list_depth].inverted = (type == tagInverted);
+        list_template[list_depth].buffer = (char*)malloc(1);
+        list_template[list_depth].buffer_len = 1;
+        list_template[list_depth].buffer[0] = '\0';
+        buffer_tail = tag_start + strlen(tag) + strlen("{{#}}");
       }
     } else if(tag_start &&
         tag_start >= (buffer_in + buffer_in_len - TAG_NAME_LEN - strlen("{{#}}")))
@@ -916,21 +922,24 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
 
   memmove(buffer_in, buffer_tail, strlen(buffer_tail) +1);
 
-  Serial.print("d  |");
+  /*Serial.print("d  |");
   Serial.print(list_depth);
   Serial.print(" ");
   Serial.println((int)parsing_list);
   Serial.print("bo |");
-  Serial.println(buffer_out);
+  Serial.println(buffer_out);*/
 }
 
 char* CompileMustache::findClosingTag(char* buffer_in, const int buffer_in_len,
                                       const char* tag)
 {
-  char full_tag[TAG_NAME_LEN + strlen("{{/}}")];
+  char full_tag[TAG_NAME_LEN + strlen("{{/}}") +1];
+  full_tag[0] = '\0';
   strcat(full_tag, "{{/");
   strcat(full_tag, tag);
   strcat(full_tag, "}}");
+  //Serial.print("ct |");
+  //Serial.println(full_tag);
   return findPattern(buffer_in, full_tag, buffer_in_len);
 }
 
@@ -945,8 +954,7 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
   for(int i = 0; i < TAG_NAME_LEN; i++){
     // Skip through any "{{" deliminators and whitespace to start of tag name.
     if(*tag_start >= '!' and *tag_start <= 'z' and
-        *tag_start != '#' and *tag_start != '/' and
-        *tag_start != '^' and *tag_start != '+'){
+        *tag_start != '#' and *tag_start != '^'){
       break;
     }
     switch(*tag_start)
@@ -959,13 +967,6 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
         if(type != tagUnset) {return false;}
         type = tagInverted;
         break;
-      case '/':
-        if(type != tagUnset) {return false;}
-        type = tagEnd;
-        break;
-      case '+':
-        if(type != tagUnset) {return false;}
-        type = tagListItem;
     }
 
     tag_start ++;
@@ -1071,10 +1072,12 @@ bool CompileMustache::replaceTag2(char* destination,
                                   int& element_count,
                                   const char* tag,
                                   const tagType type,
-                                  const int len)
+                                  const int len,
+                                  const int list_depth)
 {
   memset(destination, '\0', len);
   element_count = 0;
+
   if(strcmp(tag, "host.mac") == 0){
     uint8_t mac[6];
     WiFi.macAddress(mac);
@@ -1180,7 +1183,6 @@ bool CompileMustache::replaceTag2(char* destination,
         .toCharArray(destination, len);
       element_count = (100 * mdns->buffer_size_fail / mdns->packet_count) >= 1;
     }
-  
   } else if(strcmp(tag, "fs.files") == 0){
     unsigned int now = millis() / 10000;  // 10 Second intervals.
     if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
@@ -1195,7 +1197,7 @@ bool CompileMustache::replaceTag2(char* destination,
     if(type == tagListItem){
       list_element[list_depth]++;
     } else {
-      list_element[list_depth] = 0;
+      list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
     }
@@ -1234,6 +1236,143 @@ bool CompileMustache::replaceTag2(char* destination,
     FSInfo fs_info;
     SPIFFS.info(fs_info);
     String(fs_info.maxPathLength -2).toCharArray(destination, len);
+  
+  } else if(strcmp(tag, "io.entry") == 0){
+    list_size[list_depth] = 0;
+    for (int i = 0; i < MAX_DEVICES; ++i) {
+      if (strlen(config->devices[i].address_segment[0].segment) > 0) {
+        list_size[list_depth]++;
+      }
+    }
+    if(list_size[list_depth] < MAX_DEVICES){
+      list_size[list_depth]++;
+    }
+
+    if(type == tagListItem){
+      list_element[list_depth]++;
+    } else {
+      list_element[list_depth] = -1;
+      String(list_size[list_depth]).toCharArray(destination, len);
+      element_count = list_size[list_depth];
+    }
+  } else if(strcmp(tag, "servers.mqtt") == 0){
+    list_size[list_depth] = 0;
+    brokers->ResetIterater();
+    Host* p_host;
+    bool active;
+    while(brokers->IterateHosts(&p_host, &active)){
+      list_size[list_depth]++;
+    }
+
+    if(type == tagListItem){
+      list_element[list_depth]++;
+    } else {
+      list_element[list_depth] = -1;
+      String(list_size[list_depth]).toCharArray(destination, len);
+      element_count = list_size[list_depth];
+    }
+  } else if(strcmp(tag, "host.ssids") == 0){
+    unsigned int now = millis() / 10000;  // 10 Second intervals.
+    if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
+      list_cache_time[list_depth] = now;
+      list_size[list_depth] = WiFi.scanNetworks();
+    }
+
+    if(type == tagListItem){
+      list_element[list_depth]++;
+    } else {
+      list_element[list_depth] = -1;
+      String(list_size[list_depth]).toCharArray(destination, len);
+      element_count = list_size[list_depth];
+    }
+  } else if(strcmp(tag, "iopin") == 0){
+    list_size[list_depth] = 11;  // 11 IO pins available on the esp8266.
+
+    if(type == tagListItem){
+      list_element[list_depth]++;
+      element_count = list_size[list_depth];
+    } else {
+      list_element[list_depth] = -1;
+      String(list_size[list_depth]).toCharArray(destination, len);
+      element_count = list_size[list_depth];
+    }
+  }
+
+  // The following tags work inside lists.
+  if(strstr(list_parent, "|io.entry")){
+    // Not every config->devices entry is populated.
+    int index = config->labelToIndex(list_element[list_depth]);
+
+    if(strcmp(tag, "index") == 0){
+      String(index).toCharArray(destination, len);
+      element_count = index > 0;
+    } else if(strcmp(tag, "topic") == 0){
+      DeviceAddress(config->devices[index]).toCharArray(destination, len);
+      element_count = strlen(destination) > 0;
+    } else if(strcmp(tag, "default") == 0){
+      String(config->devices[index].io_default).toCharArray(destination, len);
+      element_count = strlen(destination) > 0;
+    } else if(strcmp(tag, "inverted") == 0){
+      String(config->devices[index].inverted ? "Y":"N").toCharArray(destination, len);
+      element_count = config->devices[index].inverted;
+    }
+  }
+
+  if(strstr(list_parent, "|iopin")){
+    int values[] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
+    
+    // Value of the parent.
+    int io_entry_index = config->labelToIndex(list_element[list_depth -1]);  
+    
+    if(strcmp(tag, "value") == 0){
+      element_count = list_element[list_depth] > 0;
+      String(values[list_element[list_depth]]).toCharArray(destination, len);
+    } else if(strcmp(tag, "selected") == 0){
+      // Look at parent's parent to see what context this has been called in.
+      // TODO: It would be preferable to pass in a value somehow.
+      char list_parent_copy[(TAG_NAME_LEN * MAX_LIST_RECURSION) + MAX_LIST_RECURSION];
+      strcpy(list_parent_copy, list_parent);
+      char* parent_end = strrchr(list_parent_copy, '|');
+      *parent_end = '\0';
+      int selected_value =
+          (strrchr(list_parent_copy, '|') &&
+          (strncmp(strrchr(list_parent_copy, '|'), "|io.entry", strlen("|io.entry")) == 0)) ?
+          config->devices[io_entry_index].iopin  // {{#io.entry} context
+          : config->enableiopin;                 // Otherwise it's probably the enableiopin.
+
+      String(selected_value).toCharArray(destination, len);
+      element_count = selected_value == list_element[list_depth];
+    }
+  }
+
+  if(strstr(list_parent, "|host.ssids")){
+    if(strcmp(tag, "name") == 0){
+      WiFi.SSID(list_element[list_depth]).toCharArray(destination, len);
+    } else if(strcmp(tag, "signal") == 0){
+      String(WiFi.RSSI(list_element[list_depth])).toCharArray(destination, len);
+    }
+  }
+}
+
+void CompileMustache::enterList(char* parents, char* tag){
+  strcat(list_parent, "|");
+  strcat(list_parent, tag);
+}
+
+void CompileMustache::exitList(char* parents){
+  //Serial.print("exitList(");
+  //Serial.print(parents);
+  //Serial.print(")");
+    
+  char* tmp = strrchr(parents, '|');
+  if(tmp){
+    Serial.print("<< |");
+    Serial.println(tmp);
+    
+    *tmp = '\0';
+    
+    Serial.print("p  |");
+    Serial.println(list_parent);
   }
 }
 
