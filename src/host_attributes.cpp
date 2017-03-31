@@ -103,11 +103,11 @@ bool Config::testValue(const String& parent,
        key == "enableiopin" ||
        key == "wifi_ssid" ||
        key == "wifi_passwd" ||
-       key == "brokers")
+       key == "io_entry")
     {
       return true;
     }
-  } else if(parent == "brokers"){
+  } else if(parent == "io_entry"){
     if(key == "address" ||
         key == "io_type" ||
         key == "iopin" ||
@@ -171,10 +171,10 @@ bool Config::setValue(const String& parent,
     } else if(key == "wifi_passwd"){
       // TODO
       return true;
-    } else if(key == "brokers"){
+    } else if(key == "io_entry"){
       return true;
     }
-  } else if(parent == "brokers"){
+  } else if(parent == "io_entry"){
     if(key == "address"){
       int index = 0;
       int previous_index = 0;
@@ -263,7 +263,7 @@ bool Config::load(const String& filename, bool test){
         Serial.printf("Problem in file: %s  on line: %i\n", filename.c_str(), line_num);
         Serial.printf("  near: \"%s\"\n", line.c_str());
       }
-      if(key == "brokers"){
+      if(key == "io_entry"){
         parent = key;
         key = "";
       }
@@ -391,7 +391,7 @@ bool Config::save(const String& filename){
   file.print(wifi_passwd);
   file.println("\",");
 
-  file.println("  \"brokers\": [");
+  file.println("  \"io_entry\": [");
   for(int i = 0; i < MAX_DEVICES; i++){
     if(strlen(config.devices[i].address_segment[0].segment) > 0){
       file.print("    {\"address\": \"");

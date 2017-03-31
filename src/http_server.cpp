@@ -811,8 +811,8 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       if(list_template[list_depth].inverted){
         element_count = !bool(element_count);
       }
+      int tmp_element_count;
       for(int i = 0; i < element_count; i++){
-        int tmp_element_count;
         replaceTag2(tag_content, itterator, tmp_element_count,
                     list_template[list_depth].tag, tagListItem, 128, list_depth);
 
@@ -1250,23 +1250,26 @@ bool CompileMustache::replaceTag2(char* destination,
 
     if(type == tagListItem){
       list_element[list_depth]++;
+      Serial.println("io.entry ++");
+      Serial.println(list_element[list_depth]);
     } else {
       list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
     }
   } else if(strcmp(tag, "servers.mqtt") == 0){
-    list_size[list_depth] = 0;
-    brokers->ResetIterater();
     Host* p_host;
     bool active;
-    while(brokers->IterateHosts(&p_host, &active)){
-      list_size[list_depth]++;
-    }
-
     if(type == tagListItem){
+      brokers->IterateHosts(&p_host, &active);
       list_element[list_depth]++;
     } else {
+      list_size[list_depth] = 0;
+      brokers->ResetIterater();
+      while(brokers->IterateHosts(&p_host, &active)){
+        list_size[list_depth]++;
+      }
+      brokers->ResetIterater();
       list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
@@ -1300,11 +1303,22 @@ bool CompileMustache::replaceTag2(char* destination,
 
   // The following tags work inside lists.
   if(strstr(list_parent, "|io.entry")){
+    int parent_depth = depthOfParent(list_parent, "|io.entry");
+
     // Not every config->devices entry is populated.
-    int index = config->labelToIndex(list_element[list_depth]);
+    int index = config->labelToIndex(list_element[parent_depth]);
 
     if(strcmp(tag, "index") == 0){
       String(index).toCharArray(destination, len);
+      Serial.print("i  |");
+      Serial.println(list_element[parent_depth]);
+      Serial.print("i  |");
+      Serial.println(index);
+      Serial.print("i  |");
+      Serial.println(destination);
+      Serial.print("pd |");
+      Serial.println(parent_depth);
+
       element_count = index > 0;
     } else if(strcmp(tag, "topic") == 0){
       DeviceAddress(config->devices[index]).toCharArray(destination, len);
@@ -1319,10 +1333,11 @@ bool CompileMustache::replaceTag2(char* destination,
   }
 
   if(strstr(list_parent, "|iopin")){
+    int parent_depth = depthOfParent(list_parent, "|iopin");
     int values[] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
     
     // Value of the parent.
-    int io_entry_index = config->labelToIndex(list_element[list_depth -1]);  
+    int io_entry_index = config->labelToIndex(list_element[parent_depth]);  
     
     if(strcmp(tag, "value") == 0){
       element_count = list_element[list_depth] > 0;
@@ -1330,7 +1345,7 @@ bool CompileMustache::replaceTag2(char* destination,
     } else if(strcmp(tag, "selected") == 0){
       // Look at parent's parent to see what context this has been called in.
       // TODO: It would be preferable to pass in a value somehow.
-      char list_parent_copy[(TAG_NAME_LEN * MAX_LIST_RECURSION) + MAX_LIST_RECURSION];
+      /*char list_parent_copy[(TAG_NAME_LEN * MAX_LIST_RECURSION) + MAX_LIST_RECURSION];
       strcpy(list_parent_copy, list_parent);
       char* parent_end = strrchr(list_parent_copy, '|');
       *parent_end = '\0';
@@ -1341,7 +1356,7 @@ bool CompileMustache::replaceTag2(char* destination,
           : config->enableiopin;                 // Otherwise it's probably the enableiopin.
 
       String(selected_value).toCharArray(destination, len);
-      element_count = selected_value == list_element[list_depth];
+      element_count = selected_value == list_element[list_depth];*/
     }
   }
 
@@ -1350,6 +1365,107 @@ bool CompileMustache::replaceTag2(char* destination,
       WiFi.SSID(list_element[list_depth]).toCharArray(destination, len);
     } else if(strcmp(tag, "signal") == 0){
       String(WiFi.RSSI(list_element[list_depth])).toCharArray(destination, len);
+    }
+  }
+
+  if(strstr(list_parent, "|fs.files")){
+    int parent_depth = depthOfParent(list_parent, "|fs.files");
+
+    Dir dir = SPIFFS.openDir("/");
+    for(int i=0; i <= list_element[parent_depth] && dir.next(); i++){ }
+
+    if(strcmp(tag, "filename") == 0){
+      if(type == tagPlain){
+        File file = dir.openFile("r");
+        String filename = file.name();
+        filename.remove(0, 1);
+        filename.toCharArray(destination, len);
+        file.close();
+      }
+    } else if(strcmp(tag, "size") == 0){
+      if(type == tagPlain){
+        File file = dir.openFile("r");
+        String(file.size()).toCharArray(destination, len);
+        file.close();
+      }
+    } else if(strcmp(tag, "is_mustache") == 0){
+      File file = dir.openFile("r");
+      String filename = file.name();
+      file.close();
+      bool test = filename.endsWith(".mustache");
+
+      if(type == tagListItem){
+        element_count = list_element[parent_depth];
+      } else {
+        element_count = (int)test;
+        String(test ? "Y":"N").toCharArray(destination, len);
+      }
+    }
+  }
+
+  if(strstr(list_parent, "|servers.mqtt")){
+    Host* p_host;
+    bool active;
+    brokers->GetLastHost(&p_host, active);
+    if(strcmp(tag, "service_name") == 0){
+      if(type == tagPlain){
+        p_host->service_name.toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "host_name") == 0){
+      if(type == tagPlain){
+        p_host->host_name.toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "address") == 0){
+      if(type == tagPlain){
+        Serial.println(p_host->address, HEX);
+        ip_to_string(p_host->address).toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "port") == 0){
+      if(type == tagPlain){
+        String(p_host->port).toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "service_valid_until") == 0){
+      if(type == tagPlain){
+        String(p_host->service_valid_until).toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "host_valid_until") == 0){
+      if(type == tagPlain){
+        String(p_host->host_valid_until).toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "ipv4_valid_until") == 0){
+      if(type == tagPlain){
+        String(p_host->ipv4_valid_until).toCharArray(destination, len);
+      }
+    } else if(strcmp(tag, "success_counter") == 0){
+      if(type == tagPlain){
+        String(p_host->success_counter).toCharArray(destination, len);
+      } else if(type == tagList){
+      } else if(type == tagInverted){
+      }
+    } else if(strcmp(tag, "fail_counter") == 0){
+      if(type == tagPlain){
+        String(p_host->fail_counter).toCharArray(destination, len);
+      } else if(type == tagList){
+      } else if(type == tagInverted){
+      }
+    } else if(strcmp(tag, "connection_attempts") == 0){
+      if(type == tagPlain){
+        String(p_host->success_counter + p_host->fail_counter).toCharArray(destination, len);
+      } else if(type == tagList){
+      } else if(type == tagInverted){
+      }
+    } else if(strcmp(tag, "active") == 0){
+      if(type == tagPlain){
+        if(active){
+          strncpy(destination, "active", len);
+        }
+      } else if(type == tagListItem){
+        int parent_depth = depthOfParent(list_parent, "|fs.files");
+        element_count = list_element[parent_depth];
+      } else {
+        element_count = (int)active;
+        String(active ? "Y":"N").toCharArray(destination, len);
+      }
     }
   }
 }

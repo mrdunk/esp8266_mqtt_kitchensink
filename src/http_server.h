@@ -101,6 +101,20 @@ class CompileMustache{
   bool duplicateList(char* tag_start, const char* tag, const int number);
   bool removeList(char* tag_start_buf, const char* tag);
 
+  int depthOfParent(char* list_parent, const char* parent){
+    char* start = strstr(list_parent, parent);
+    if(!start){
+      return 0;
+    }
+    int depth = 1;
+    for(char* pos = list_parent; pos < start; pos++){
+      if(*pos == '|'){
+        depth++;
+      }
+    }
+    return depth;
+  }
+
  private:
   bool success;
   int buffer_size;
