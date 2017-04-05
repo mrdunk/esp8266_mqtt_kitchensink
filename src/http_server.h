@@ -82,8 +82,7 @@ class CompileMustache{
   char* findClosingTag(char* buffer_in, const int buffer_in_len, const char* tag);
 
   /* Replace a {{tag}} with the string in tag_content. */
-  bool replaceTag(char* tag_position, const char* tag, char* tag_content, tagType type);
-  bool replaceTag2(char* destination,
+  bool replaceTag(char* destination,
                    int& itterator,
                    int& element_count,
                    const char* tag,
@@ -97,9 +96,6 @@ class CompileMustache{
    * tag_position.
    * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
   bool tagName(char* tag_start, char* tag, tagType& type);
-
-  bool duplicateList(char* tag_start, const char* tag, const int number);
-  bool removeList(char* tag_start_buf, const char* tag);
 
   int depthOfParent(char* list_parent, const char* parent){
     char* start = strstr(list_parent, parent);
@@ -129,7 +125,6 @@ class CompileMustache{
   int list_element[MAX_LIST_RECURSION];  
   int list_size[MAX_LIST_RECURSION];
   int list_cache_time[MAX_LIST_RECURSION];
-  int list_depth;  // TODO remove
   char list_parent[128];
   
   bool myMemmove(char* destination, char* source, int len);

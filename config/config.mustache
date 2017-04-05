@@ -114,12 +114,11 @@
           </td>
           <td>
             <select class="device_{{index}}_iotype">
-              <option value="test">test</option>
-              <option value="onoff">onoff</option>
-              <option value="pwm">pwm</option>
-              <option value="inputPullUp" selected>inputPullUp</option>
-              <option value="input">input</option>
-              <option value="timer">timer</option>
+              {{#iotype}}
+              <option value="{{value}}" {{#selected}}selected{{/selected}}>
+                {{value}}
+              </option>
+              {{/iotype}}
             </select>
           </td>
           <td>
