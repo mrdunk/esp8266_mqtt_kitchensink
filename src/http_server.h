@@ -82,7 +82,7 @@ class CompileMustache{
   char* findClosingTag(char* buffer_in, const int buffer_in_len, const char* tag);
 
   /* Replace a {{tag}} with the string in tag_content. */
-  bool replaceTag(char* destination,
+  void replaceTag(char* destination,
                    int& itterator,
                    int& element_count,
                    const char* tag,
@@ -152,7 +152,6 @@ class HttpServer{
   void fileBrowser();
   void onRoot();
   const String mime(const String& filename);
-  void onConfig();
   void onSet();
   void onReset();
   bool fileOpen(const String& filename);

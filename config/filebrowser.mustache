@@ -14,7 +14,7 @@
             <th></th>
             <th></th>
           </tr>
-          |{{#fs.files}}|
+          {{#fs.files}}
           <tr>
             <td><a href="get?filename={{filename}}">{{filename}}</a></td>
             <td>{{size}}</td>
@@ -26,7 +26,7 @@
             <td><a href="get?filename={{filename}}&action=pull">pull</a></td>
             <td><a href="get?filename={{filename}}&action=del">del</a></td>
           </tr>
-          |{{/fs.files}}|
+          {{/fs.files}}
         </table>
         <table>
           <tr>

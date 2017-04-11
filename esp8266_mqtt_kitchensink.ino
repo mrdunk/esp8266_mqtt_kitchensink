@@ -186,7 +186,7 @@ void setup_network(void) {
   }
 
   // Wait for connection
-  int timer = RESET_ON_CONNECT_FAIL * 100;
+  int timer = RESET_ON_CONNECT_FAIL * 10;
   while (WiFi.status() != WL_CONNECTED){
     delay(10);
     if(timer % 100 == 0){

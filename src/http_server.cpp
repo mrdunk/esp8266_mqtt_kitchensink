@@ -49,12 +49,8 @@ HttpServer::HttpServer(char* _buffer,
     allow_config(_allow_config)
 {
   esp8266_http_server = MyESP8266WebServer(HTTP_PORT);
-  esp8266_http_server.on("/favicon.ico", [&]() {
-      esp8266_http_server.send(404, "text/plain", "todo");});
   esp8266_http_server.on("/test", [&]() {onTest();});
   esp8266_http_server.on("/", [&]() {onRoot();});
-  esp8266_http_server.on("/configure", [&]() {onConfig();});
-  esp8266_http_server.on("/configure/", [&]() {onConfig();});
   esp8266_http_server.on("/set", [&]() {onSet();});
   esp8266_http_server.on("/set/", [&]() {onSet();});
   esp8266_http_server.on("/reset", [&]() {onReset();});
@@ -76,7 +72,7 @@ void  HttpServer::onRoot(){
 }
 
 void HttpServer::onTest(){
-  bufferAppend("testing");
+  bufferAppend(" testing ");
   esp8266_http_server.send(200, "text/plain", buffer);
 }
 
@@ -92,7 +88,7 @@ void HttpServer::onFileOperations(const String& _filename){
   String filename = "";
   if(_filename.length()){
     filename = _filename;
-  } else  if(esp8266_http_server.hasArg("filename")){
+  } else if(esp8266_http_server.hasArg("filename")){
     filename = esp8266_http_server.arg("filename");
   }
 
@@ -147,34 +143,29 @@ void HttpServer::onFileOperations(const String& _filename){
     } else if(esp8266_http_server.hasArg("action") and
         esp8266_http_server.arg("action") == "raw")
     {
-
-      esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-      esp8266_http_server.send(200, "text/plain", "");
-
-      // Callback to pass to the read() method.
-      std::function<bool(char*, int)> callback = 
-          [&server = esp8266_http_server](char* buffer, int len)
-      {
-        server.sendContent(buffer);
-        buffer[0] = '\0';
-        return true;
-      };
-
       if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
         return;
       }
       
-      while(fileRead(buffer, buffer_size)){
-        esp8266_http_server.sendContent(buffer);
-        bufferClear();
+      int size = esp8266_http_server.streamFile(file, "text/plain");
+
+      fileClose();
+      return;
+    } else if (!filename.endsWith(".mustache")){
+      if(!fileOpen(filename)){
+        bufferAppend("\nUnsuccessful.\n");
+        esp8266_http_server.send(404, "text/plain", buffer);
+        return;
       }
+      
+      int size = esp8266_http_server.streamFile(file, mime(filename));
 
       fileClose();
       return;
     } else {
-      // Display default view of file.
+      // Perform markup on .mustache template file.
       if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
@@ -182,10 +173,6 @@ void HttpServer::onFileOperations(const String& _filename){
       }
       
       esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-
-      if(filename.endsWith(".css")){
-        esp8266_http_server.sendHeader("Cache-Control", "max-age=3600");
-      }
 
       if(esp8266_http_server.hasArg("action") and
           esp8266_http_server.arg("action") == "compiled_source"){
@@ -193,49 +180,38 @@ void HttpServer::onFileOperations(const String& _filename){
         Serial.println(filename);
         esp8266_http_server.send(200, "text/plain", "");
       } else {
-          Serial.print("Displaying: ");
-          Serial.println(filename);
+        Serial.print("Displaying: ");
+        Serial.println(filename);
         esp8266_http_server.send(200, mime(filename), "");
       }
 
-      if(filename.endsWith(".mustache")){
-        CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
+      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
 
-        int list_depth = 0;
-        bool parsing_list = false;
-        int buffer_in_len = 500;
-        char* buffer_in = (char*)malloc(buffer_in_len);
-        int buffer_out_len = 1000;
-        char* buffer_out = (char*)malloc(buffer_out_len);
-        buffer_in[0] = '\0';
+      int list_depth = 0;
+      bool parsing_list = false;
+      int buffer_in_len = 500;
+      char* buffer_in = (char*)malloc(buffer_in_len);
+      int buffer_out_len = 1000;
+      char* buffer_out = (char*)malloc(buffer_out_len);
+      buffer_in[0] = '\0';
+      buffer_out[0] = '\0';
+      while(fileRead(buffer_in, buffer_in_len)){
+        compileMustache.parseBuffer(buffer_in, buffer_in_len,
+            buffer_out, buffer_out_len,
+            list_depth, parsing_list);
+        if(strlen(buffer_out)){
+          esp8266_http_server.sendContent(buffer_out);
+        }
         buffer_out[0] = '\0';
-        while(fileRead(buffer_in, buffer_in_len)){
-          compileMustache.parseBuffer(buffer_in, buffer_in_len,
-              buffer_out, buffer_out_len,
-              list_depth, parsing_list);
-          if(strlen(buffer_out)){
-            esp8266_http_server.sendContent(buffer_out);
-          }
-          buffer_out[0] = '\0';
-        }
-        free(buffer_in);
-        free(buffer_out);
-      } else {
-        bufferClear();
-        while(fileRead(buffer, buffer_size)){
-          esp8266_http_server.sendContent(buffer);
-          bufferClear();
-        }
       }
+      free(buffer_in);
+      free(buffer_out);
 
       esp8266_http_server.sendHeader("Connection", "close");
       fileClose();
 
-      Serial.println(filename);
       Serial.print("buffer length: ");
       Serial.println(strnlen(buffer, buffer_size));
-
-      //esp8266_http_server.send(200, mime(filename), buffer);
       return;
     }
   } else {
@@ -258,7 +234,7 @@ void HttpServer::fileBrowser(){
     String size(file.size());
     file.close();
 
-    bufferAppend(link(filename, "get?filename=" + filename) + "\t" + size + "\n");
+    bufferAppend(link(filename, "get?filename=" + filename) + "\t" + size + "<br>");
   }
   SPIFFS.end();
   esp8266_http_server.send(200, "text/html", buffer);
@@ -316,187 +292,10 @@ const String HttpServer::mime(const String& filename){
             filename.endsWith(".mustache"))
   {
     return "text/html";
+  } else if(filename.endsWith(".ico")){
+    return "image/x-icon";
   }
   return "text/plain";
-}
-
-void HttpServer::onConfig(){
-  Serial.println("onConfig() +");
-  bool sucess = true;
-  bufferClear();
-
-  if(*allow_config){
-    (*allow_config)--;
-  }
-  if(*allow_config <= 0 && esp8266_http_server.hasArg("enablepassphrase") &&
-      config->enablepassphrase != "" &&
-      esp8266_http_server.arg("enablepassphrase") == config->enablepassphrase){
-    *allow_config = 1;
-  }
-  Serial.print("allow_config: ");
-  Serial.println(*allow_config);
-  
-  if(*allow_config){
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    sucess &= bufferAppend(descriptionListItem("mac_address", macToStr(mac)));
-    
-    if(config->ip == IPAddress(0, 0, 0, 0)) {
-      sucess &= bufferAppend(descriptionListItem("IP address by DHCP",
-                                     String(ip_to_string(WiFi.localIP()))));
-    }
-    sucess &= bufferAppend(descriptionListItem("hostname", 
-        textField("hostname", "hostname", config->hostname, "hostname") +
-        submit("Save", "save_hostname" , "save('hostname')")));
-    sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-
-    sucess &= bufferAppend(descriptionListItem("IP address",
-        ipField("ip", ip_to_string(config->ip), ip_to_string(config->ip), "ip") +
-        submit("Save", "save_ip" , "save('ip')") +
-        String("(0.0.0.0 for DHCP. Static boots quicker.)")));
-    if(config->ip != IPAddress(0, 0, 0, 0)) {
-      sucess &= bufferAppend(descriptionListItem("Subnet mask",
-          ipField("subnet", ip_to_string(config->subnet), ip_to_string(config->subnet), "subnet") +
-          submit("Save", "save_subnet" , "save('subnet')")));
-      sucess &= bufferAppend(descriptionListItem("Gateway",
-          ipField("gateway", ip_to_string(config->gateway),
-            ip_to_string(config->gateway), "gateway") +
-          submit("Save", "save_gateway" , "save('gateway')")));
-    }
-    sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-
-    sucess &= bufferAppend(descriptionListItem("Static MQTT broker ip",
-        ipField("brokerip", ip_to_string(config->brokerip),
-                ip_to_string(config->brokerip), "brokerip") +
-        submit("Save", "save_brokerip" , "save('brokerip')") +
-        String("(0.0.0.0 to use mDNS auto discovery)")));
-    sucess &= bufferAppend(descriptionListItem("Static MQTT broker port",
-        portValue(config->brokerport, "brokerport") +
-        submit("Save", "save_brokerport" , "save('brokerport')")));
-    sucess &= bufferAppend(descriptionListItem("MQTT subscription prefix",
-        textField("subscribeprefix", "subscribeprefix", config->subscribeprefix,
-          "subscribeprefix") +
-        submit("Save", "save_subscribeprefix" , "save('subscribeprefix')")));
-    sucess &= bufferAppend(descriptionListItem("MQTT publish prefix",
-        textField("publishprefix", "publishprefix", config->publishprefix,
-          "publishprefix") +
-        submit("Save", "save_publishprefix" , "save('publishprefix')")));
-    sucess &= bufferAppend(descriptionListItem("&nbsp", "&nbsp"));
-    
-    sucess &= bufferAppend(descriptionListItem("HTTP Firmware host",
-        textField("firmwarehost", "firmwarehost", config->firmwarehost,
-          "firmwarehost") +
-        submit("Save", "save_firmwarehost" , "save('firmwarehost')")));
-    sucess &= bufferAppend(descriptionListItem("HTTP Firmware directory",
-        textField("firmwaredirectory", "firmwaredirectory", config->firmwaredirectory,
-          "firmwaredirectory") +
-        submit("Save", "save_firmwaredirectory" , "save('firmwaredirectory')")));
-    sucess &= bufferAppend(descriptionListItem("HTTP Firmware port",
-        portValue(config->firmwareport, "firmwareport") +
-        submit("Save", "save_firmwareport" , "save('firmwareport')")));
-    sucess &= bufferAppend(descriptionListItem("Config enable passphrase",
-        textField("enablepassphrase", "enablepassphrase", config->enablepassphrase,
-          "enablepassphrase") +
-        submit("Save", "save_enablepassphrase" , "save('enablepassphrase')")));
-    sucess &= bufferAppend(descriptionListItem("Config enable IO pin",
-        ioPin(config->enableiopin, "enableiopin") +
-        submit("Save", "save_enableiopin" , "save('enableiopin')")));
-
-
-    sucess &= bufferAppend(tableStart());
-
-    sucess &= bufferAppend(rowStart("") + header("index") + header("Topic") + header("type") + 
-        header("IO pin") + header("Default val") + header("Inverted") +
-        header("") + header("") + rowEnd());
-
-    int empty_device = -1;
-    for (int i = 0; i < MAX_DEVICES; ++i) {
-      if (strlen(config->devices[i].address_segment[0].segment) > 0) {
-        sucess &= bufferAppend(rowStart("device_" + String(i)));
-        sucess &= bufferAppend(cell(String(i)));
-        String name = "topic_";
-        name.concat(i);
-        sucess &= bufferAppend(cell(config->subscribeprefix + String("/") +
-            textField(name, "some/topic", DeviceAddress(config->devices[i]),
-              "device_" + String(i) + "_topic")));
-        sucess &= bufferAppend(cell(outletType(TypeToString(config->devices[i].io_type),
-                                               "device_" + String(i) + "_iotype")));
-        sucess &= bufferAppend(cell(ioPin(config->devices[i].iopin,
-              "device_" + String(i) + "_iopin")));
-        sucess &= bufferAppend(cell(ioValue(config->devices[i].io_default,
-              "device_" + String(i) + "_io_default")));
-        sucess &= bufferAppend(cell(ioInverted(config->devices[i].inverted,
-              "device_" + String(i) + "_inverted")));
-
-        sucess &= bufferAppend(cell(submit("Save", "save_" + String(i),
-                                 "save('device_" + String(i) +"')")));
-        sucess &= bufferAppend(cell(submit("Delete", "del_" + String(i),
-                                  "del('device_" + String(i) +"')")));
-        sucess &= bufferAppend(rowEnd());
-      } else if (empty_device < 0){
-        empty_device = i;
-      }
-    }
-    if (empty_device >= 0){
-      // An empty slot for new device.
-      sucess &= bufferAppend(rowStart("device_" + String(empty_device)));
-      sucess &= bufferAppend(cell(String(empty_device)));
-      String name = "address_";
-      name.concat(empty_device);
-      sucess &= bufferAppend(cell(config->subscribeprefix + String("/") +
-          textField(name, "new/topic", "", "device_" + String(empty_device) + "_topic")));
-      sucess &= bufferAppend(cell(outletType("onoff", "device_" +
-                                              String(empty_device) + "_iotype")));
-      name = "pin_";
-      name.concat(empty_device);
-      sucess &= bufferAppend(cell(ioPin(0, "device_" + String(empty_device) + "_iopin")));
-      sucess &= bufferAppend(cell(ioValue(0, "device_" + String(empty_device) + "_io_default")));
-      sucess &= bufferAppend(cell(ioInverted(false, "device_" +
-                                             String(empty_device) + "_inverted")));
-      sucess &= bufferAppend(cell(submit("Save", "save_" + String(empty_device),
-            "save('device_" + String(empty_device) + "')")));
-      sucess &= bufferAppend(cell(""));
-      sucess &= bufferAppend(rowEnd());
-    }
-    
-    sucess &= bufferAppend(tableEnd());
-
-    sucess &= bufferAppend(descriptionListItem("firmware.bin",
-          link("view", "get?filename=firmware.bin") + "&nbsp;&nbsp;&nbsp;" +
-          link("pull_from_server", "/get?action=pull&filename=firmware.bin")));
-    sucess &= bufferAppend(descriptionListItem("config.cfg",
-          link("view", "get?filename=config.cfg") + "&nbsp;&nbsp;&nbsp;" +
-          link("pull_from_server", "get?action=pull&filename=config.cfg")));
-    sucess &= bufferAppend(descriptionListItem("script.js",
-          link("view", "get?filename=script.js") + "&nbsp;&nbsp;&nbsp;" +
-          link("pull_from_server", "get?action=pull&filename=script.js")));
-    sucess &= bufferAppend(descriptionListItem("style.css",
-          link("view", "get?filename=style.css") + "&nbsp;&nbsp;&nbsp;" +
-          link("pull_from_server", "get?action=pull&filename=style.css")));
-  
-    sucess &= bufferInsert(listStart());
-    sucess &= sucess &= bufferAppend(listEnd());
-  } else {
-    Serial.println("Not allowed to onConfig()");
-    sucess &= bufferAppend("Configuration mode not enabled.<br>Press button connected to IO ");
-    sucess &= bufferAppend(String(config->enableiopin));
-    sucess &= bufferAppend(
-        "<br>or append \"?enablepassphrase=PASSWORD\" to this URL<br>and reload.");
-    sucess &= bufferInsert(pageHeader("", ""));
-    sucess &= bufferAppend(pageFooter());
-    esp8266_http_server.send(401, "text/html", buffer);
-    return;
-  }
-
-  
-  sucess &= bufferInsert(pageHeader("style.css", "script.js"));
-  sucess &= bufferAppend(pageFooter());
-
-
-  Serial.println(sucess);
-  Serial.println(strlen(buffer));
-  Serial.println("onConfig() -");
-  esp8266_http_server.send((sucess ? 200 : 500), "text/html", buffer);
 }
 
 void HttpServer::onSet(){
@@ -626,15 +425,14 @@ void HttpServer::onSet(){
 }
 
 void HttpServer::onReset() {
+  esp8266_http_server.send(200, "text/plain", "restarting host");
   Serial.println("restarting host");
   delay(100);
   ESP.reset();
-
-  esp8266_http_server.send(200, "text/plain", "restarting host");
 }
 
 void HttpServer::bufferClear(){
-  Serial.println("bufferClear");
+  //Serial.println("bufferClear");
   buffer[0] = '\0';
 }
 
@@ -710,6 +508,7 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
 
   while(buffer_out && strlen(buffer_tail)){
     wdt_reset();
+
     char* tag_start = findPattern(buffer_tail, "{{",
         strnlen(buffer_tail, buffer_in + buffer_in_len - buffer_tail) -1);
     if(!tag_start && *(buffer_tail + strlen(buffer_tail) -1) == '{'){
@@ -837,8 +636,13 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       if(type == tagPlain){
         replaceTag(tag_content, itterator, element_count, tag, type, 128, list_depth);
         if(strlen(tag_content) > len_buff_space){
+          len_buff_space = strlen(tag_content);
           buffer_out_len += strlen(tag_content);
           buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
+          if(!buffer_out){
+            Serial.println("ERROR: Failed realloc()");
+            break;
+          }
         }
         strncat(buffer_out, tag_content, len_buff_space);
         buffer_tail += len_to_tag + strnlen(tag, 128) + strlen("{{}}");
@@ -950,7 +754,7 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
   return false;
 }
 
-bool CompileMustache::replaceTag(char* destination,
+void CompileMustache::replaceTag(char* destination,
                                   int& itterator,
                                   int& element_count,
                                   const char* tag,
@@ -958,6 +762,11 @@ bool CompileMustache::replaceTag(char* destination,
                                   const int len,
                                   const int list_depth)
 {
+  /*Serial.print("t  |");
+  Serial.print(tag);
+  Serial.print("  ");
+  Serial.println(type);*/
+
   memset(destination, '\0', len);
   element_count = 0;
 
@@ -1365,6 +1174,9 @@ bool CompileMustache::replaceTag(char* destination,
       }
     }
   }
+
+  /*Serial.print("td |");
+  Serial.println(destination);*/
 }
 
 void CompileMustache::enterList(char* parents, char* tag){
