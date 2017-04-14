@@ -120,6 +120,53 @@ bool Config::testValue(const String& parent,
   return false;
 }
 
+bool Config::sessionExpired(){
+  Serial.print("Time expires: ");
+  Serial.println(session_time + SESSION_TIMEOUT);
+
+  const unsigned int now = millis() / 1000;
+  Serial.print("Time now:     ");
+  Serial.println(now);
+
+  if((session_time + SESSION_TIMEOUT) <= now){
+    session_token = 0;
+    session_override = false;
+    return true;
+  }
+  return false;
+}
+
+bool Config::sessionValid(const String& session_key){
+  if(sessionExpired()){
+    return false;
+  }
+
+  Serial.print("session_key is:       ");
+  Serial.println(session_key);
+
+  String cookie_header("ESPSESSIONID=");
+  cookie_header += session_token;
+
+  Serial.print("Expected session_key: ");
+  Serial.println(cookie_header);
+
+  if(session_key.indexOf(cookie_header) == 0 &&
+      session_key.indexOf("ESPSESSIONID=0") != 0)
+  {
+    Serial.println("Authentication Successful");
+    session_time = millis() / 1000;
+    session_override = false;
+    return true;
+  }
+  if(session_override){
+    Serial.println("Authentication override");
+    session_time = millis() / 1000;
+    return true;
+  }
+  Serial.println("Authentication failed");
+  return false;
+}
+
 bool Config::setValue(const String& parent,
                       const String& key,
                       const String& value,

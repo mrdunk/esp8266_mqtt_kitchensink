@@ -70,7 +70,8 @@ class CompileMustache{
                   MdnsLookup* _brokers,
                   mdns::MDns* _mdns,
                   Mqtt* _mqtt,
-                  Io* _io);
+                  Io* _io,
+                  const String& _session_token);
 
   void parseBuffer(char* buffer_in, int buffer_in_len,
                    char*& buffer_out, int& buffer_out_len,
@@ -126,7 +127,8 @@ class CompileMustache{
   int list_size[MAX_LIST_RECURSION];
   int list_cache_time[MAX_LIST_RECURSION];
   char list_parent[128];
-  
+  const String& session_token; 
+
   bool myMemmove(char* destination, char* source, int len);
 
   List list_template[MAX_LIST_RECURSION];
@@ -141,12 +143,13 @@ class HttpServer{
              MdnsLookup* _brokers,
              mdns::MDns* _mdns,
              Mqtt* _mqtt,
-             Io* _io,
-             int* _allow_config);
+             Io* _io);
   void loop();
  private:
   MyESP8266WebServer esp8266_http_server;
   void onTest();
+  void handleLogin();
+  bool isAuthentified(bool redirect=true);
   void handleNotFound();
   void onFileOperations(const String& _filename = "");
   void fileBrowser();
@@ -165,7 +168,6 @@ class HttpServer{
   mdns::MDns* mdns;
   Mqtt* mqtt;
   Io* io;
-  int* allow_config;
   void bufferClear();
   bool bufferAppend(const String& to_add);
   bool bufferAppend(const char* to_add);

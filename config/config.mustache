@@ -5,7 +5,32 @@
     <link rel="stylesheet" href="style.css">
   </head>
 	<body>
+    {{^session.valid}}
+    <form action='/login' method='POST'>To log in, please use : admin/admin<br>
+      User:<input type='text' name='USERNAME' placeholder='user name'><br>
+      Password:<input type='password' name='PASSWORD' placeholder='password'><br>
+      <input type='submit' name='SUBMIT' value='Login'>
+    </form>
+    {{/session.valid}}
+    {{#session.valid}}
+    <form action='/login' method='POST'>
+      <input type='submit' name='DISCONNECT' value='Logout'>
+    </form>
+    {{/session.valid}}
+
     <dl>
+      <dt>session.browser_auth_token</dt>
+      <dd>{{session.browser_auth_token}}</dd>
+      <dt>session.current_auth_token</dt>
+      <dd>{{session.current_auth_token}}</dd>
+      <dt>session.override_auth</dt>
+      <dd>{{session.override_auth}}</dd>
+      <dt>session.valid_until</dt>
+      <dd>{{session.valid_until}}&nbsp&nbsp(now: {{host.uptime}})</dd>
+      <dt>session.valid</dt>
+      <dd>{{session.valid}}</dd>
+			<dt>&nbsp</dt><dd>&nbsp</dd>
+
 			<dt>mac_address</dt>
       <dd>{{host.mac}}</dd>
 			<dt>hostname</dt>

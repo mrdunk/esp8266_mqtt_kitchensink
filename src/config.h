@@ -67,5 +67,8 @@
 // mDNS service_type for MQTT Broker.
 #define QUESTION_SERVICE "_mqtt._tcp.local"
 
+// Number of seconds before login will expire.
+#define SESSION_TIMEOUT (60)
+
 
 #endif  // ESP8266__CONFIG_H

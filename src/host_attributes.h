@@ -42,14 +42,19 @@ struct Config {
   int enableiopin;
   char wifi_ssid[STRING_LEN];
   char wifi_passwd[STRING_LEN];
+  uint32_t session_token;
+  uint32_t session_time;
+  bool session_override;
 
+  bool sessionValid(const String& session_key);
+  bool sessionExpired();
   bool setValue(const String& parent,
                 const String& key,
                 const String& value,
                 Connected_device& device);
  bool testValue(const String& parent,
-                        const String& key,
-                        const String& value);
+                const String& key,
+                const String& value);
   void clear();
   bool load(const String& filename="/config.cfg", bool test=false);
   bool save(const String& filename="/config.cfg");

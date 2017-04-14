@@ -29,6 +29,7 @@
 #include "config.h"
 #include "serve_files.h"
 
+
 extern void setPullFirmware(bool pull);
 
 HttpServer::HttpServer(char* _buffer,
@@ -37,16 +38,14 @@ HttpServer::HttpServer(char* _buffer,
                        MdnsLookup* _brokers,
                        mdns::MDns* _mdns,
                        Mqtt* _mqtt,
-                       Io* _io,
-                       int* _allow_config) : 
+                       Io* _io) :
     buffer(_buffer),
     buffer_size(_buffer_size),
     config(_config),
     brokers(_brokers),
     mdns(_mdns),
     mqtt(_mqtt),
-    io(_io),
-    allow_config(_allow_config)
+    io(_io)
 {
   esp8266_http_server = MyESP8266WebServer(HTTP_PORT);
   esp8266_http_server.on("/test", [&]() {onTest();});
@@ -56,12 +55,108 @@ HttpServer::HttpServer(char* _buffer,
   esp8266_http_server.on("/reset", [&]() {onReset();});
   esp8266_http_server.on("/reset/", [&]() {onReset();});
   esp8266_http_server.on("/get", [&]() {onFileOperations();});
+  esp8266_http_server.on("/login", [&]() {handleLogin();});
+  esp8266_http_server.on("/isauth", [&]() {if(isAuthentified()){
+                                             esp8266_http_server.send(200, "text/plain", "auth OK");
+                                           } else {
+                                           esp8266_http_server.send(200, "text/plain", "no auth"); 
+                                           }
+                                           });
+  esp8266_http_server.on("/auth", [&]() {if(!esp8266_http_server.authenticate("test", "test"))
+                                           return esp8266_http_server.requestAuthentication();
+                                         esp8266_http_server.send(200, "text/plain", "Login OK");});
   esp8266_http_server.onNotFound([&]() {handleNotFound();});
+
+  const char * headerkeys[] = {"User-Agent", "Cookie", "Referer"} ;
+  size_t headerkeyssize = sizeof(headerkeys)/sizeof(char*);
+  //ask server to track these headers
+  esp8266_http_server.collectHeaders(headerkeys, headerkeyssize);
 
   esp8266_http_server.begin();
   bufferClear();
 }
 
+//Check if header is present and correct
+bool HttpServer::isAuthentified(bool redirect){
+  Serial.println("isAuthentified()");
+  if (esp8266_http_server.hasHeader("Cookie")){
+    if(config->sessionValid(esp8266_http_server.header("Cookie"))){
+      Serial.println("Authentication Successful");
+      return true;
+    }
+  }
+  Serial.println("Authentication Failed");
+  if(redirect){
+    esp8266_http_server.sendHeader("Location","/login");
+    esp8266_http_server.sendHeader("Cache-Control","no-cache");
+    esp8266_http_server.sendHeader("Set-Cookie","ESPSESSIONID=0");
+    esp8266_http_server.send(307);
+  }
+  return false;
+}
+
+//login page, also called for disconnect
+void HttpServer::handleLogin(){
+  Serial.println("handleLogin()");
+  String msg;
+  String action("/login");
+
+  if(esp8266_http_server.header("Referer")){
+    action = esp8266_http_server.header("Referer");
+  }
+
+  if (esp8266_http_server.hasHeader("Cookie")){
+    Serial.print("Found cookie: ");
+    String cookie = esp8266_http_server.header("Cookie");
+    Serial.println(cookie);
+  }
+  if (esp8266_http_server.hasArg("DISCONNECT")){
+    Serial.println("Disconnection");
+    esp8266_http_server.sendHeader("Location", action);
+    esp8266_http_server.sendHeader("Cache-Control","no-cache");
+    esp8266_http_server.sendHeader("Set-Cookie","ESPSESSIONID=0");
+    esp8266_http_server.send(301);
+    return;
+  }
+  if (esp8266_http_server.hasArg("DISCONNECT_ALL")){
+    // Disconnect every bodies sessions.
+    Serial.println("Disconnection");
+    esp8266_http_server.sendHeader("Location", action);
+    esp8266_http_server.sendHeader("Cache-Control","no-cache");
+    esp8266_http_server.sendHeader("Set-Cookie","ESPSESSIONID=0");
+    esp8266_http_server.send(301);
+    config->session_token = 0;
+    config->session_override = false;
+    return;
+  }
+  if (esp8266_http_server.hasArg("USERNAME") && esp8266_http_server.hasArg("PASSWORD")){
+    if (esp8266_http_server.arg("USERNAME") == "admin" && 
+        esp8266_http_server.arg("PASSWORD") == "admin" )
+    {
+      if(config->sessionExpired() || config->session_token <= 0){
+        config->session_token = (uint32_t)secureRandom(UINT32_MAX);
+      }
+      config->session_time = millis() / 1000;
+
+      esp8266_http_server.sendHeader("Location", action);
+      esp8266_http_server.sendHeader("Cache-Control","no-cache");
+      String cookie_header("ESPSESSIONID=");
+      cookie_header += config->session_token;
+      esp8266_http_server.sendHeader("Set-Cookie", cookie_header);
+      esp8266_http_server.send(301);
+      Serial.println("Log in Successful");
+      return;
+    }
+    msg = "Wrong username/password! try again.";
+    Serial.println("Log in Failed");
+  }
+  String content = "<html><body><form action='/login' method='POST'>";
+  content += "User:<input type='text' name='USERNAME' placeholder='user name'><br>";
+  content += "Password:<input type='password' name='PASSWORD' placeholder='password'><br>";
+  content += "<input type='submit' name='SUBMIT' value='Submit'></form>" + msg + "<br>";
+  content += "</body></html>";
+  esp8266_http_server.send(200, "text/html", content);
+}
 
 void HttpServer::loop(){
   esp8266_http_server.handleClient();
@@ -97,6 +192,9 @@ void HttpServer::onFileOperations(const String& _filename){
           esp8266_http_server.arg("action") == "pull")
     {
       // Pull file from server.
+      Serial.print("Pull file from server: ");
+      Serial.println(filename);
+
       bufferAppend("Pulling firmware from " +
           String(config->firmwarehost) + ":" + String(config->firmwareport) +
           String(config->firmwaredirectory) + filename + "\n");
@@ -121,6 +219,9 @@ void HttpServer::onFileOperations(const String& _filename){
     } else if(esp8266_http_server.hasArg("action") and
         esp8266_http_server.arg("action") == "del")
     {
+      Serial.print("Deleting: ");
+      Serial.println(filename);
+
       bool result = SPIFFS.begin();
       if(!SPIFFS.exists(String("/") + filename)){
         bufferAppend("\nUnsuccessful.\n");
@@ -143,6 +244,9 @@ void HttpServer::onFileOperations(const String& _filename){
     } else if(esp8266_http_server.hasArg("action") and
         esp8266_http_server.arg("action") == "raw")
     {
+      Serial.print("Displaying raw mustache file: ");
+      Serial.println(filename);
+
       if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
@@ -154,6 +258,9 @@ void HttpServer::onFileOperations(const String& _filename){
       fileClose();
       return;
     } else if (!filename.endsWith(".mustache")){
+      Serial.print("Displaying file: ");
+      Serial.println(filename);
+
       if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
@@ -185,7 +292,9 @@ void HttpServer::onFileOperations(const String& _filename){
         esp8266_http_server.send(200, mime(filename), "");
       }
 
-      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns, mqtt, io);
+      String session_token = esp8266_http_server.header("Cookie");
+      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns,
+          mqtt, io, session_token);
 
       int list_depth = 0;
       bool parsing_list = false;
@@ -210,8 +319,6 @@ void HttpServer::onFileOperations(const String& _filename){
       esp8266_http_server.sendHeader("Connection", "close");
       fileClose();
 
-      Serial.print("buffer length: ");
-      Serial.println(strnlen(buffer, buffer_size));
       return;
     }
   } else {
@@ -303,10 +410,7 @@ void HttpServer::onSet(){
   bool sucess = true;
   bufferClear();
   
-  Serial.print("allow_config: ");
-  Serial.println(*allow_config);
-
-  if(*allow_config <= 0){
+  if(!config->sessionValid(esp8266_http_server.header("Cookie"))){
     Serial.println("Not allowed to onSet()");
     esp8266_http_server.send(401, "text/html", "Not allowed to onSet()");
     return;
@@ -465,7 +569,8 @@ CompileMustache::CompileMustache(char* _buffer,
                                  MdnsLookup* _brokers,
                                  mdns::MDns* _mdns,
                                  Mqtt* _mqtt,
-                                 Io* _io) :
+                                 Io* _io,
+                                 const String& _session_token) :
   buffer(_buffer),  
   buffer_size(_buffer_size),
   config(_config),
@@ -473,7 +578,8 @@ CompileMustache::CompileMustache(char* _buffer,
   mdns(_mdns),
   mqtt(_mqtt),
   io(_io),
-  list_parent()
+  list_parent(),
+  session_token(_session_token)
 {
   for(int i = 0; i < MAX_LIST_RECURSION; i++){
     list_element[i] = -1;
@@ -770,7 +876,33 @@ void CompileMustache::replaceTag(char* destination,
   memset(destination, '\0', len);
   element_count = 0;
 
-  if(strcmp(tag, "host.mac") == 0){
+  if(strcmp(tag, "session.browser_auth_token") == 0){
+    session_token.toCharArray(destination, len);
+    element_count = 1;
+  } else if(strcmp(tag, "session.current_auth_token") == 0){
+    String current_session_token("ESPSESSIONID=");
+    current_session_token += config->session_token;
+    current_session_token.toCharArray(destination, len);
+    element_count = 1;
+  } else if(strcmp(tag, "session.override_auth") == 0){
+    String(config->session_override).toCharArray(destination, len);
+    element_count = (int)config->session_override;
+  } else if(strcmp(tag, "session.valid_until") == 0){
+    String(config->session_time + SESSION_TIMEOUT).toCharArray(destination, len);
+    element_count = 1;
+  } else if(strcmp(tag, "session.valid") == 0){
+    const unsigned int now = millis() / 1000;
+    const int remaining = config->session_time + SESSION_TIMEOUT - now;
+    if(config->sessionValid(session_token) && remaining > 0){
+      String(config->session_time + SESSION_TIMEOUT - now).toCharArray(destination, len);
+      element_count = 1;
+    } else {
+      String("expired").toCharArray(destination, len);
+      element_count = 0;
+    }
+  } else if(strcmp(tag, "session.login_form") == 0){
+
+  } else if(strcmp(tag, "host.mac") == 0){
     uint8_t mac[6];
     WiFi.macAddress(mac);
     String mac_str = macToStr(mac);

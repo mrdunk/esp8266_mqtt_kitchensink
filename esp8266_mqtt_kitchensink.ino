@@ -38,6 +38,8 @@
 #include "src/http_server.h"
 #include "src/serve_files.h"
 
+#include <WebSocketsServer.h>
+
 
 Config config = {
   "",
@@ -56,10 +58,11 @@ Config config = {
   0,
   "",
   "",
+  0,                    // session_token
+  0,                    // session_time
+  false                 // session_override
 };
 
-// Global to track whether access to configuration WebPages should be allowed.
-int allow_config;
 
 // Large buffer to be used by MDns and HttpServer.
 byte buffer[BUFFER_SIZE];
@@ -84,7 +87,7 @@ Io io(&mqtt);
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
-                       &my_mdns, &mqtt, &io, &allow_config);
+                       &my_mdns, &mqtt, &io);
 
 
 void setPullFirmware(bool pull){
@@ -170,6 +173,8 @@ bool pullFirmware(){
 }
 
 
+WebSocketsServer webSocket = WebSocketsServer(81);
+
 void setup_network(void) {
   //Serial.setDebugOutput(true);
  
@@ -207,12 +212,16 @@ void setup_network(void) {
   if(!testPullFirmware()){
     brokers.InsertManual("broker_hint", config.brokerip, config.brokerport);
     brokers.RegisterMDns(&my_mdns);
+
+    webSocket.begin();
+    webSocket.onEvent(webSocketEvent);
   }
 }
 
 void configInterrupt(){
   Serial.println("configInterrupt");
-  allow_config = 100;
+  config.session_override = true;
+  config.session_time = millis() / 1000;
 }
 
 void setup(void) {
@@ -244,10 +253,41 @@ void setup(void) {
     }
 
     mqtt.registerCallback(mqttCallback);
-
-    allow_config = 0;
   }
   Serial.println("done setup");
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+	switch(type) {
+		case WStype_DISCONNECTED:
+			Serial.printf("[%u] Disconnected!\n", num);
+			break;
+		case WStype_CONNECTED:
+			{
+				IPAddress ip = webSocket.remoteIP(num);
+				Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+
+				// send message to client
+				webSocket.sendTXT(num, "Connected");
+			}
+			break;
+		case WStype_TEXT:
+			Serial.printf("[%u] get Text: %s\n", num, payload);
+
+			// send message to client
+			webSocket.sendTXT(num, "message here");
+
+			// send data to all connected clients
+			// webSocket.broadcastTXT("message here");
+			break;
+		case WStype_BIN:
+			Serial.printf("[%u] get binary length: %u\n", num, length);
+			hexdump(payload, length);
+
+			// send message to client
+			// webSocket.sendBIN(num, payload, length);
+			break;
+	}
 }
 
 void loop(void) {
@@ -266,5 +306,7 @@ void loop(void) {
     io.loop();
     my_mdns.loop();
     http_server.loop();
+
+    webSocket.loop();
   }
 }
