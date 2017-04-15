@@ -53,90 +53,6 @@ void Mqtt::loop(){
   }
 }
 
-void Mqtt::parse_topic(const char* topic, Address_Segment* address_segments){
-  // We only care about the part of the topic without the prefix
-  // so check how many segments there are in config.subscribeprefix
-  // so we can ignore that many segments later.
-  int i, segment = 0;
-  if(strlen(config.subscribeprefix)){
-    for (i=0, segment=-1; config.subscribeprefix[i]; i++){
-      segment -= (config.subscribeprefix[i] == '/');
-    }
-  }
-
-  // Casting non-const here as we don't actually modify topic.
-  char* p_segment_start = (char*)topic;
-  char* p_segment_end = strchr(topic, '/');
-  while(p_segment_end != NULL){
-    if(segment >= 0){
-      int segment_len = p_segment_end - p_segment_start;
-      if(segment_len > NAME_LEN){
-        segment_len = NAME_LEN;
-      }
-      strncpy(address_segments[segment].segment, p_segment_start, segment_len);
-      address_segments[segment].segment[segment_len] = '\0';
-    }
-    p_segment_start = p_segment_end +1;
-    p_segment_end = strchr(p_segment_start, '/');
-    segment++;
-  }
-  strncpy(address_segments[segment++].segment, p_segment_start, NAME_LEN);
-  
-  for(; segment < ADDRESS_SEGMENTS; segment++){
-    address_segments[segment].segment[0] = '\0';
-  }
-}
-
-bool Mqtt::compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2){
-  if(strlen(address_2[0].segment) <= 0){
-    return false;
-  }
-  if(strcmp(address_1[0].segment, "_all") != 0 &&
-      strcmp(address_1[0].segment, address_2[0].segment) != 0){
-    return false;
-  }
-  for(int s=1; s < ADDRESS_SEGMENTS; s++){
-    if(strcmp(address_1[s].segment, "_all") == 0){
-      return true;
-    }
-    if(strcmp(address_1[s].segment, address_2[s].segment) != 0){
-      return false;
-    }
-  }
-  return true;
-}
-
-String Mqtt::value_from_payload(const byte* payload, const unsigned int length, const String key) {
-  String buffer;
-  int index = 0;
-  for (int i = 0; i < length; i++) {
-    buffer += (char)payload[i];
-  }
-  buffer.trim();
-  
-  while(buffer.length()){
-    index = buffer.indexOf(",", index);
-    if(index < 0){
-      index = buffer.length();
-    }
-    String substring = buffer.substring(0, index);
-    int seperator_pos = substring.indexOf(":");
-    if(seperator_pos > 0){
-      String k = substring.substring(0, seperator_pos);
-      String v = substring.substring(seperator_pos +1);
-      k.trim();
-      v.trim();
-      if(k == key){
-        return v;
-      }
-    }
-
-    buffer = buffer.substring(index +1);
-    buffer.trim();
-  }
-
-  return "";
-}
 
 // Called whenever a MQTT topic we are subscribed to arrives.
 void Mqtt::callback(const char* topic, const byte* payload, const unsigned int length) {
@@ -149,7 +65,7 @@ void Mqtt::callback(const char* topic, const byte* payload, const unsigned int l
   Serial.println();
   
   Address_Segment address_segments[ADDRESS_SEGMENTS];
-  parse_topic(topic, address_segments);
+  parse_topic(config.subscribeprefix, topic, address_segments);
 
   String command = value_from_payload(payload, length, "_command");
 
@@ -184,13 +100,14 @@ void Mqtt::mqtt_announce_host(){
   WiFi.macAddress(mac);
   String parsed_mac = macToStr(mac);;
   parsed_mac.replace(":", "_");
-  String announce = "_subject:";
+  String announce = "\"_subject\":\"";
   announce += parsed_mac;
 
-  announce += ", _hostname:";
+  announce += "\", \"_hostname\":\"";
   announce += config.hostname;
-  announce += ", _ip:";
+  announce += "\", \"_ip\":\"";
   announce += ip_to_string(WiFi.localIP());
+  announce += "\"";
 
   String address = config.publishprefix;
   address += "/hosts/_announce";

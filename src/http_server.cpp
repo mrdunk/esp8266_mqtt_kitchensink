@@ -24,7 +24,7 @@
 #include "FS.h"
 
 #include "http_server.h"
-#include "html_primatives.h"
+//#include "html_primatives.h"
 #include "ipv4_helpers.h"
 #include "config.h"
 #include "serve_files.h"
@@ -341,7 +341,8 @@ void HttpServer::fileBrowser(){
     String size(file.size());
     file.close();
 
-    bufferAppend(link(filename, "get?filename=" + filename) + "\t" + size + "<br>");
+    bufferAppend("<a href='get?filename=" + filename + "'>" + filename + "</a>" +
+        "\t" + size + "<br>");
   }
   SPIFFS.end();
   esp8266_http_server.send(200, "text/html", buffer);

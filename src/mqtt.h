@@ -22,16 +22,15 @@
 #ifndef ESP8266__MQTT_H
 #define ESP8266__MQTT_H
 
+
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>      // Include "PubSubClient" library.
 
 
 #include "config.h"
 #include "mdns_actions.h"
+#include "message_parsing.h"
 
-struct Address_Segment {
-  char segment[NAME_LEN];
-};
 
 class Mqtt{
  public:
@@ -43,10 +42,6 @@ class Mqtt{
       was_connected(false),
       count_loop(0) {};
 
-  void parse_topic(const char* topic, Address_Segment* address_segments);
-  bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2);
-  String value_from_payload(const byte* payload, const unsigned int length, const String key);
-  
   // Called whenever a MQTT topic we are subscribed to arrives.
   void callback(const char* topic, const byte* payload, const unsigned int length);
 

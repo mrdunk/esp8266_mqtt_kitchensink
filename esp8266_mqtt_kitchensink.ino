@@ -22,7 +22,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
-#include <PubSubClient.h>      // Include "PubSubClient" library.
+//#include <PubSubClient.h>      // Include "PubSubClient" library.
 #include <mdns.h>              // Include "esp8266_mdns" library.
 
 #include "ESP8266httpUpdate.h"
@@ -37,8 +37,8 @@
 #include "src/config.h"
 #include "src/http_server.h"
 #include "src/serve_files.h"
+#include "src/websocket.h"
 
-#include <WebSocketsServer.h>
 
 
 Config config = {
@@ -88,6 +88,8 @@ Io io(&mqtt);
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
                        &my_mdns, &mqtt, &io);
+
+WebSocketsServer webSocket = WebSocketsServer(81);
 
 
 void setPullFirmware(bool pull){
@@ -173,8 +175,6 @@ bool pullFirmware(){
 }
 
 
-WebSocketsServer webSocket = WebSocketsServer(81);
-
 void setup_network(void) {
   //Serial.setDebugOutput(true);
  
@@ -255,39 +255,6 @@ void setup(void) {
     mqtt.registerCallback(mqttCallback);
   }
   Serial.println("done setup");
-}
-
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-	switch(type) {
-		case WStype_DISCONNECTED:
-			Serial.printf("[%u] Disconnected!\n", num);
-			break;
-		case WStype_CONNECTED:
-			{
-				IPAddress ip = webSocket.remoteIP(num);
-				Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-
-				// send message to client
-				webSocket.sendTXT(num, "Connected");
-			}
-			break;
-		case WStype_TEXT:
-			Serial.printf("[%u] get Text: %s\n", num, payload);
-
-			// send message to client
-			webSocket.sendTXT(num, "message here");
-
-			// send data to all connected clients
-			// webSocket.broadcastTXT("message here");
-			break;
-		case WStype_BIN:
-			Serial.printf("[%u] get binary length: %u\n", num, length);
-			hexdump(payload, length);
-
-			// send message to client
-			// webSocket.sendBIN(num, payload, length);
-			break;
-	}
 }
 
 void loop(void) {
