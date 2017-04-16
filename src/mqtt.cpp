@@ -100,7 +100,7 @@ void Mqtt::mqtt_announce_host(){
   WiFi.macAddress(mac);
   String parsed_mac = macToStr(mac);;
   parsed_mac.replace(":", "_");
-  String announce = "\"_subject\":\"";
+  String announce = "{\"_macaddr\":\"";
   announce += parsed_mac;
 
   announce += "\", \"_hostname\":\"";
@@ -108,6 +108,12 @@ void Mqtt::mqtt_announce_host(){
   announce += "\", \"_ip\":\"";
   announce += ip_to_string(WiFi.localIP());
   announce += "\"";
+
+  //announce += ", \"_subject\":\"hosts/";
+  //announce += config.hostname;
+  //announce += "\"";
+
+  announce += "}";
 
   String address = config.publishprefix;
   address += "/hosts/_announce";

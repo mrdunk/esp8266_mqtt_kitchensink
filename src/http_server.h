@@ -22,7 +22,6 @@
 #ifndef ESP8266__HTTP_SERVER__H
 #define ESP8266__HTTP_SERVER__H
 
-//#include "html_primatives.h"
 #include "host_attributes.h"
 #include "mdns_actions.h"
 

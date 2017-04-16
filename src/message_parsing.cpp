@@ -19,7 +19,7 @@
  * SOFTWARE.
  */
 
-#include <ArduinoJson.h>
+#include <ArduinoJson.h>        // ArduinoJson library.
 #include "message_parsing.h"
 
 
@@ -85,12 +85,6 @@ String value_from_payload(const byte* _payload, const unsigned int length, const
   // Loop until length as we don't have null terminator.
   for(int i = 0; i < length; i++){
     payload += (char)_payload[i];
-  }
-  Serial.println(payload);
-
-  payload.trim();
-  if(!payload.startsWith("{")){
-    payload = "{" + payload + "}";
   }
   
   Serial.println(payload);

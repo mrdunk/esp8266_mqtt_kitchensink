@@ -39,7 +39,7 @@
 // Each device has an address in the form 'role/location1/location2/etc'
 // eg: 'lighting/kitchen/worktop/left'.
 // These map to the second half of the MQTT topic.
-#define ADDRESS_SEGMENTS 4
+#define ADDRESS_SEGMENTS 6
 
 // MQTT topics will start with a prefix.
 // eg: in the topic 'homeautomation/0/lighting/kitchen/worktop/left',
@@ -59,7 +59,7 @@
 #define HTTP_PORT 80
 
 // Buffer size. Buffer is used by both mDNS and HTTP server.
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 1000
 
 // Maximum length of a MQTT topic.
 #define MAX_TOPIC_LENGTH  (PREFIX_LEN + ((NAME_LEN +1) * ADDRESS_SEGMENTS) +1)
@@ -68,7 +68,7 @@
 #define QUESTION_SERVICE "_mqtt._tcp.local"
 
 // Number of seconds before login will expire.
-#define SESSION_TIMEOUT (60)
+#define SESSION_TIMEOUT (60 * 60)
 
 
 #endif  // ESP8266__CONFIG_H

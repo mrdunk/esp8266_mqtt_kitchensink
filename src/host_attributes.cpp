@@ -272,7 +272,8 @@ bool Config::load(const String& filename, bool test){
   File file = SPIFFS.open(filename, "r");
 
   if (!file) {
-    Serial.println("File doesn't exist.");
+    Serial.print("File doesn't exist: ");
+    Serial.println(filename);
     SPIFFS.end();
     return false;
   }

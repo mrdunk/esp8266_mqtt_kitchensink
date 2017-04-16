@@ -45,7 +45,9 @@
       </tr>
       {{/fs.files}}
       {{#session.valid}}
-      <form action='/get' method='POST' id='new_file'></form>
+      <form action='/get' method='POST' id='new_file'>
+        <input type="hidden" name="action" value="pull">
+      </form>
       <tr>
         <td><input type='text' name='filename' placeholder='new filename' form='new_file'></td>
         <td></td>

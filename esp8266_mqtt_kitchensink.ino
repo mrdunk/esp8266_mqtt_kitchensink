@@ -22,7 +22,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
-//#include <PubSubClient.h>      // Include "PubSubClient" library.
 #include <mdns.h>              // Include "esp8266_mdns" library.
 
 #include "ESP8266httpUpdate.h"
@@ -37,7 +36,7 @@
 #include "src/config.h"
 #include "src/http_server.h"
 #include "src/serve_files.h"
-#include "src/websocket.h"
+//#include "src/websocket.h"
 
 
 
@@ -89,7 +88,7 @@ Io io(&mqtt);
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
                        &my_mdns, &mqtt, &io);
 
-WebSocketsServer webSocket = WebSocketsServer(81);
+//WebSocketsServer webSocket = WebSocketsServer(81);
 
 
 void setPullFirmware(bool pull){
@@ -213,8 +212,8 @@ void setup_network(void) {
     brokers.InsertManual("broker_hint", config.brokerip, config.brokerport);
     brokers.RegisterMDns(&my_mdns);
 
-    webSocket.begin();
-    webSocket.onEvent(webSocketEvent);
+    //webSocket.begin();
+    //webSocket.onEvent(webSocketEvent);
   }
 }
 
@@ -274,6 +273,6 @@ void loop(void) {
     my_mdns.loop();
     http_server.loop();
 
-    webSocket.loop();
+    //webSocket.loop();
   }
 }

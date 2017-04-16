@@ -273,8 +273,9 @@ void Io::inputCallback(){
 }
 
 void Io::mqttAnnounce(const Connected_device& device){
-  String payload = "_state:";
+  String payload = "{\"_state\":\"";
   payload += String(device.io_value);
+  payload += "\"}";
   
   String topic = config.publishprefix;
   topic += "/";
