@@ -630,7 +630,7 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
           buffer_in + buffer_in_len - buffer_tail,
           list_template[list_depth].tag);
 
-      int len = 0;
+      unsigned int len = 0;
       if(close_tag){
         len = close_tag - buffer_tail;
       } else {
@@ -994,7 +994,7 @@ void CompileMustache::replaceTag(char* destination,
     element_count = mdns->packet_count > 0;
   } else if(strcmp(tag, "mdns.buffer_fail") == 0){
     String(mdns->buffer_size_fail).toCharArray(destination, len);
-    element_count = mdns->buffer_size_fail >= 0;
+    element_count = 0;
   } else if(strcmp(tag, "mdns.buffer_sucess") == 0){
     String(mdns->packet_count - mdns->buffer_size_fail).toCharArray(destination, len);
     element_count = (mdns->packet_count - mdns->buffer_size_fail) > 0;
@@ -1079,7 +1079,7 @@ void CompileMustache::replaceTag(char* destination,
       element_count = list_size[list_depth];
     }
   } else if(strcmp(tag, "host.ssids") == 0){
-    unsigned int now = millis() / 10000;  // 10 Second intervals.
+    int now = millis() / 10000;  // 10 Second intervals.
     if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
       list_cache_time[list_depth] = now;
       list_size[list_depth] = WiFi.scanNetworks();

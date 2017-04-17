@@ -29,7 +29,6 @@
 
 #include "config.h"
 #include "mdns_actions.h"
-#include "message_parsing.h"
 
 
 class Mqtt{
@@ -45,11 +44,8 @@ class Mqtt{
   // Called whenever a MQTT topic we are subscribed to arrives.
   void callback(const char* topic, const byte* payload, const unsigned int length);
 
-  // Publish a topic with hostname, ip, MAC address, etc.
-  void mqtt_announce_host();
-
   // Publish a payload to a topic.
-  void announce(const String topic, const String payload);
+  void publish(const String topic, const String payload);
 
   // Assemble a list of topics we want to subscribe to.
   void queue_mqtt_subscription(const char* path);

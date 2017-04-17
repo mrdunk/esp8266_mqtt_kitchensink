@@ -26,6 +26,10 @@
 #include "mqtt.h"
 
 
+struct Address_Segment {
+  char segment[NAME_LEN];
+};
+
 enum Io_Type {
   test,
   onoff,
@@ -76,7 +80,7 @@ class Io{
   void setState(Connected_device& device);
   void registerCallback(void(*callback_)()){ callback = callback_; }
   void inputCallback();
-  void mqttAnnounce(const Connected_device& device);
+  void toAnnounce(const Connected_device& device, String& topic, String& payload);
  private:
   void (*callback)();
   void setPinMode(uint8_t iopin, uint8_t mode);

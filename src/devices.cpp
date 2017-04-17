@@ -56,7 +56,7 @@ void Connected_device::setInverted(const String& value){
 // Ensure buffer contains only valid characters for a word in an MQTT topic.
 void sanitizeTopicSection(char* buffer){
   bool wildcard_found = false;
-  for(int i=0; i < strlen(buffer);i++){
+  for(unsigned int i=0; i < strlen(buffer);i++){
     if(wildcard_found){
       // Wildcard was found as first character but there is other stuff here too
       // so mask out the wildcard.
@@ -80,14 +80,12 @@ void sanitizeTopicSection(char* buffer){
 
 // Ensure buffer contains only valid format for an MQTT topic.
 void sanitizeTopic(char* buffer){
-  bool wildcard_found = false;
-  
   // Remove any trailing "/".
   if(buffer[strlen(buffer) -1] == '/'){
     buffer[strlen(buffer) -1] = '\0';
   }
 
-  for(int i=0; i < strlen(buffer); i++){
+  for(unsigned int i=0; i < strlen(buffer); i++){
     if(buffer[i] == '/' && i > 0 && i < strlen(buffer) -1){
       // Section seperator is fine as long as it's not the first or last character
     } else if(buffer[i] >= 'A' && buffer[i] <= 'Z'){
@@ -181,7 +179,10 @@ void Io::loop(){
           value = (config.devices[i].inverted ? value == 0 : value);
           if(value != config.devices[i].io_value){
             config.devices[i].io_value = value;
-            mqttAnnounce(config.devices[i]);
+            String topic;
+            String payload;
+            toAnnounce(config.devices[i], topic, payload);
+            mqtt->publish(topic, payload);
 
             // This pin is also the enable pin for the configuration menu.
             if(i == config.enableiopin){
@@ -248,7 +249,7 @@ void Io::setState(Connected_device& device){
   } else if(device.io_type == input){
   } else if(device.io_type == input_pullup){
   } else if(device.io_type == timer){
-    const unsigned int now = millis() / 1000;
+    const int now = millis() / 1000;
     setPinMode(device.iopin, OUTPUT);
     // If pin was previously set to Io_Type::pwm we need to switch off analogue output
     // before using digital output.
@@ -265,23 +266,27 @@ void Io::setState(Connected_device& device){
     }
   }
 
-	mqttAnnounce(device);
+	String topic;
+  String payload;
+	toAnnounce(device, topic, payload);
+  mqtt->publish(topic, payload);
 }
 
 void Io::inputCallback(){
   dirty_inputs = true;
 }
 
-void Io::mqttAnnounce(const Connected_device& device){
-  String payload = "{\"_state\":\"";
-  payload += String(device.io_value);
-  payload += "\"}";
+void Io::toAnnounce(const Connected_device& device,
+                      String& topic, String& payload)
+{
+  topic = config.publishprefix;
+  topic += "/lighting/_announce";
   
-  String topic = config.publishprefix;
-  topic += "/";
-  topic += DeviceAddress(device);
-
-  mqtt->announce(topic, payload);
+  payload = "{\"_state\":\"";
+  payload += String(device.io_value);
+  payload += "\",\"_subject\":\"";
+  payload += DeviceAddress(device);
+  payload += "\"}";
 }
 
 const String TypeToString(Io_Type type){

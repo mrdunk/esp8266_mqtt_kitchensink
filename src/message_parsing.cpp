@@ -77,17 +77,10 @@ bool compare_addresses(const Address_Segment* address_1, const Address_Segment* 
   }
   return true;
 }
-
-String value_from_payload(const byte* _payload, const unsigned int length, const String key) {
-  StaticJsonBuffer<200> jsonBuffer;
-  String payload("");
-
-  // Loop until length as we don't have null terminator.
-  for(int i = 0; i < length; i++){
-    payload += (char)_payload[i];
-  }
   
+String valueFromStringPayload(const String& payload, const String& key) {
   Serial.println(payload);
+  StaticJsonBuffer<200> jsonBuffer;
 
   JsonObject& root = jsonBuffer.parseObject(payload);
   if (!root.success()){
@@ -103,3 +96,86 @@ String value_from_payload(const byte* _payload, const unsigned int length, const
   return root[key];
 }
 
+String value_from_payload(const byte* _payload, const unsigned int length, const String key) {
+  String payload("");
+
+  // Loop until length as we don't have null terminator.
+  for(unsigned int i = 0; i < length; i++){
+    payload += (char)_payload[i];
+  }
+
+  return valueFromStringPayload(payload, key);
+}
+
+void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
+                  String* return_topics, String* return_payloads)
+{
+  int return_pointer = 0;
+
+  if(topic == ""){
+    topic = valueFromStringPayload(payload, "_subject");
+  }
+  if(topic == ""){
+    Serial.println("WARNING: Missing topic.");
+    return;
+  }
+  String command = valueFromStringPayload(payload, "_command");
+  if(command == ""){
+    Serial.println("WARNING: Missing payload.");
+    return;
+  }
+
+  Address_Segment address_segments[ADDRESS_SEGMENTS];
+  char topic_char[topic.length() +1];
+  topic.toCharArray(topic_char, topic.length() +1);
+  parse_topic(config->subscribeprefix, topic_char, address_segments);
+
+  if(strncmp(address_segments[0].segment, "hosts", NAME_LEN) == 0 ||
+      strncmp(address_segments[0].segment, "_all", NAME_LEN) == 0)
+  {
+    if(command == "solicit"){
+      //Serial.println("Announce host.");
+      toAnnounceHost(config, return_topics[return_pointer], return_payloads[return_pointer]);
+      return_pointer++;
+    }
+  }
+
+  for (int i = 0; i < MAX_DEVICES; ++i) {
+		if(compare_addresses(address_segments, config->devices[i].address_segment)){
+      //Serial.print("Matches: ");
+			//Serial.println(i);
+
+			if(command != "solicit"){
+				io->changeState(config->devices[i], command);
+      }
+      io->toAnnounce(config->devices[i],
+                     return_topics[return_pointer],
+                     return_payloads[return_pointer]);
+      return_pointer++;
+		}
+  }
+}
+
+void toAnnounceHost(Config* config, String& topic, String& payload){
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  String parsed_mac = macToStr(mac);;
+  parsed_mac.replace(":", "_");
+  payload = "{\"_macaddr\":\"";
+  payload += parsed_mac;
+
+  payload += "\", \"_hostname\":\"";
+  payload += config->hostname;
+  payload += "\", \"_ip\":\"";
+  payload += ip_to_string(WiFi.localIP());
+  payload += "\"";
+
+  //payload += ", \"_subject\":\"hosts/";
+  //payload += config->hostname;
+  //payload += "\"";
+
+  payload += "}";
+
+  topic = config->publishprefix;
+  topic += "/hosts/_announce";
+}

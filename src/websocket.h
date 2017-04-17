@@ -19,29 +19,43 @@
  * SOFTWARE.
  */
 
-#ifndef ESP8266__MESSAGE_PARSING_H
-#define ESP8266__MESSAGE_PARSING_H
+#ifndef ESP8266__WEBSOCKET_H
+#define ESP8266__WEBSOCKET_H
 
-/* This library does some standard parsing on incoming messages. */
+#include <WebSocketsServer.h>   // WebSockets library.
 
-#include <ESP8266WiFi.h>
-#include "config.h"
-#include "host_attributes.h"
-#include "devices.h"
+extern WebSocketsServer webSocket;
+extern Io io;
 
-// Convert full topic into tokens, separated by "/".
-void parse_topic(const char* subscribeprefix,
-                 const char* topic,
-                 Address_Segment* address_segments);
 
-bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2);
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+	switch(type) {
+		case WStype_DISCONNECTED:
+			Serial.printf("[%u] Disconnected!\n", num);
+			break;
+		case WStype_CONNECTED:
+			{
+				IPAddress ip = webSocket.remoteIP(num);
+				Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n",
+						num, ip[0], ip[1], ip[2], ip[3], payload);
 
-// Presuming payload is JSON formatted, return value for corresponding key.
-String value_from_payload(const byte* payload, const unsigned int length, const String key);
+				// send message to client
+				webSocket.sendTXT(num, "Connected");
+			}
+			break;
+		case WStype_TEXT:
+			Serial.printf("[%u] get Text: %s\n", num, payload);
 
-void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
-                  String* return_topics, String* return_payloads);
+			// send message to client
+			webSocket.sendTXT(num, "message here");
 
-void toAnnounceHost(Config* config, String& topic, String& payload);
+			// send data to all connected clients
+			// webSocket.broadcastTXT("message here");
+			break;
+		default:
+			Serial.printf("[%u] unexpected type: %u\n", num, length);
+	}
+}
 
-#endif  // ESP8266__MESSAGE_PARSING_H
+
+#endif  // ESP8266__WEBSOCKET_H

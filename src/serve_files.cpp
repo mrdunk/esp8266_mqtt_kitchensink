@@ -126,6 +126,7 @@ bool pullFile(const String& filename, const Config& config){
 
 	file.close();
   Serial.println("Done saving config file.");
+  return true;
 }
 
 

@@ -22,6 +22,7 @@
 #include "host_attributes.h"
 #include "devices.h"
 #include "mqtt.h"
+#include "message_parsing.h"
 
 // TODO. These externs are lazy.
 // Io depends on Mqtt. Mqtt depends on Io.
@@ -55,73 +56,34 @@ void Mqtt::loop(){
 
 
 // Called whenever a MQTT topic we are subscribed to arrives.
-void Mqtt::callback(const char* topic, const byte* payload, const unsigned int length) {
+void Mqtt::callback(const char* _topic, const byte* _payload, const unsigned int length) {
+  String topic(_topic);
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+
+  String payload;
+  for (unsigned int i = 0; i < length; i++) {
+    payload += (char)_payload[i];
   }
-  Serial.println();
+  Serial.println(payload);
   
-  Address_Segment address_segments[ADDRESS_SEGMENTS];
-  parse_topic(config.subscribeprefix, topic, address_segments);
-
-  String command = value_from_payload(payload, length, "_command");
-
-  if(strncmp(address_segments[0].segment, "hosts", NAME_LEN) == 0 ||
-      strncmp(address_segments[0].segment, "_all", NAME_LEN) == 0)
-  {
-    if(command == "solicit"){
-      //Serial.println("Announce host.");
-      mqtt_announce_host();
-    }
-  }
-
-  for (int i = 0; i < MAX_DEVICES; ++i) {
-		if(compare_addresses(address_segments, config.devices[i].address_segment)){
-			//Serial.print("Matches: ");
-			//Serial.println(i);
-
-			if(command == ""){
-				// pass
-			} else if(command == "solicit"){
-				io.mqttAnnounce(config.devices[i]);
-			} else {
-				io.changeState(config.devices[i], command);
-			}          
-		}
+  String return_topics[MAX_DEVICES +1];
+  String return_payloads[MAX_DEVICES +1];
+  actOnMessage(&io, &config, topic, payload, return_topics, return_payloads);
+  for(int i = 0; i < MAX_DEVICES +1; i++){
+    publish(return_topics[i], return_payloads[i]);
   }
 }
 
-void Mqtt::mqtt_announce_host(){
-  // TODO Make this use mqtt_announce().
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  String parsed_mac = macToStr(mac);;
-  parsed_mac.replace(":", "_");
-  String announce = "{\"_macaddr\":\"";
-  announce += parsed_mac;
-
-  announce += "\", \"_hostname\":\"";
-  announce += config.hostname;
-  announce += "\", \"_ip\":\"";
-  announce += ip_to_string(WiFi.localIP());
-  announce += "\"";
-
-  //announce += ", \"_subject\":\"hosts/";
-  //announce += config.hostname;
-  //announce += "\"";
-
-  announce += "}";
-
-  String address = config.publishprefix;
-  address += "/hosts/_announce";
-
-  mqtt_client.publish(address.c_str(), announce.c_str());
-}
-
-void Mqtt::announce(const String topic, const String payload){
+void Mqtt::publish(const String topic, const String payload){
+  if(!connected() || topic == "" || payload == ""){
+    return;
+  }
+  Serial.print("publish: ");
+  Serial.print(topic);
+  Serial.print("  :  ");
+  Serial.println(payload);
   mqtt_client.publish(topic.c_str(), payload.c_str());
 }
 
@@ -195,7 +157,10 @@ void Mqtt::connect() {
 
     for (int i = 0; i < MAX_DEVICES; ++i) {
       if (strlen(config.devices[i].address_segment[0].segment) > 0) {
-        io.mqttAnnounce(config.devices[i]);
+        String fetch_topic;
+        String fetch_payload;
+				io.toAnnounce(config.devices[i], fetch_topic, fetch_payload);
+        publish(fetch_topic, fetch_payload);
 
         strncpy(address, config.subscribeprefix, MAX_TOPIC_LENGTH -1);
         strncat(address, "/_all", MAX_TOPIC_LENGTH -1 - strlen(address));
@@ -215,12 +180,16 @@ void Mqtt::connect() {
         }
       }
     }
+    String host_topic;
+    String host_payload;
+    toAnnounceHost(&config, host_topic, host_payload);
+    publish(host_topic, host_payload);
   }
   brokers->RateHost(mqtt_client.connected());
+  
   if (mqtt_client.connected()) {
     Serial.print("MQTT connected to: ");
     Serial.println(broker.address);
-    mqtt_announce_host();
   }
 }
 
