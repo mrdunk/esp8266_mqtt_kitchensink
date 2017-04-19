@@ -141,7 +141,6 @@ void Io::setup(){
       if(config.devices[i].io_type == input_pullup){
         config.devices[i].io_value = 1;
         setPinMode(config.devices[i].iopin, INPUT_PULLUP);
-        //pinMode(config.devices[i].iopin, INPUT_PULLUP);
         if(callback){
           attachInterrupt(digitalPinToInterrupt(config.devices[i].iopin),
                           callback, CHANGE);
@@ -149,7 +148,6 @@ void Io::setup(){
       } else if(config.devices[i].io_type == input){
         config.devices[i].io_value = 1;
         setPinMode(config.devices[i].iopin, INPUT);
-        //pinMode(config.devices[i].iopin, INPUT);
         if(callback){
           attachInterrupt(digitalPinToInterrupt(config.devices[i].iopin),
                           callback, CHANGE);
@@ -179,10 +177,11 @@ void Io::loop(){
           value = (config.devices[i].inverted ? value == 0 : value);
           if(value != config.devices[i].io_value){
             config.devices[i].io_value = value;
-            String topic;
-            String payload;
-            toAnnounce(config.devices[i], topic, payload);
-            mqtt->publish(topic, payload);
+            //String topic;
+            //String payload;
+            //toAnnounce(config.devices[i], topic, payload);
+            //mqtt->publish(topic, payload);
+            config.devices[i].dirty = true;
 
             // This pin is also the enable pin for the configuration menu.
             if(i == config.enableiopin){
@@ -201,6 +200,17 @@ void Io::loop(){
       }
     }
   }
+}
+
+bool Io::getOutput(String& return_topic, String& return_payload){
+  for(int i=0; i < MAX_DEVICES; i++){
+    if(config.devices[i].dirty == true){
+      config.devices[i].dirty = false;
+      toAnnounce(config.devices[i], return_topic, return_payload);
+      return true;
+    }
+  }
+  return false;
 }
 
 void Io::changeState(Connected_device& device, String command){
@@ -266,10 +276,11 @@ void Io::setState(Connected_device& device){
     }
   }
 
-	String topic;
-  String payload;
-	toAnnounce(device, topic, payload);
-  mqtt->publish(topic, payload);
+	//String topic;
+  //String payload;
+	//toAnnounce(device, topic, payload);
+  //mqtt->publish(topic, payload);
+  device.dirty = true;
 }
 
 void Io::inputCallback(){

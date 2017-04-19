@@ -222,7 +222,10 @@ void HttpServer::onFileOperations(const String& _filename){
       Serial.print("Deleting: ");
       Serial.println(filename);
 
-      bool result = SPIFFS.begin();
+      if(!SPIFFS.begin()){
+        Serial.println("WARNING: Unable to SPIFFS.begin()");
+        return;
+      }
       if(!SPIFFS.exists(String("/") + filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
@@ -253,7 +256,7 @@ void HttpServer::onFileOperations(const String& _filename){
         return;
       }
       
-      int size = esp8266_http_server.streamFile(file, "text/plain");
+      esp8266_http_server.streamFile(file, "text/plain");
 
       fileClose();
       return;
@@ -267,7 +270,7 @@ void HttpServer::onFileOperations(const String& _filename){
         return;
       }
       
-      int size = esp8266_http_server.streamFile(file, mime(filename));
+      esp8266_http_server.streamFile(file, mime(filename));
 
       fileClose();
       return;
@@ -331,7 +334,10 @@ void HttpServer::onFileOperations(const String& _filename){
 }
 
 void HttpServer::fileBrowser(){
-  bool result = SPIFFS.begin();
+  if(!SPIFFS.begin()){
+    Serial.println("WARNING: Unable to SPIFFS.begin()");
+    return;
+  }
   Dir dir = SPIFFS.openDir("/");
   while(dir.next()){
     String filename = dir.fileName();
@@ -416,8 +422,6 @@ void HttpServer::onSet(){
     esp8266_http_server.send(401, "text/html", "Not allowed to onSet()");
     return;
   }
-
-  const unsigned int now = millis() / 1000;
 
   for(int i = 0; i < esp8266_http_server.args(); i++){
     sucess &= bufferInsert(esp8266_http_server.argName(i));
@@ -657,7 +661,7 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
         }
       }
 
-      int len_buff_space =
+      unsigned int len_buff_space =
           list_template[list_depth].buffer_len - strlen(list_template[list_depth].buffer) -1;
       if(len > len_buff_space){
         // Only enough space in output buffer for content before {{tag}}.
@@ -687,9 +691,8 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       }
 
       char tag_content[128];
-      int itterator = 0;
       int element_count = 0;
-      replaceTag(tag_content, itterator, element_count,
+      replaceTag(tag_content, element_count,
                   list_template[list_depth].tag, tagList, 128, list_depth);
 
       if(list_template[list_depth].inverted){
@@ -697,7 +700,7 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       }
       int tmp_element_count;
       for(int i = 0; i < element_count; i++){
-        replaceTag(tag_content, itterator, tmp_element_count,
+        replaceTag(tag_content, tmp_element_count,
                     list_template[list_depth].tag, tagListItem, 128, list_depth);
 
         int tmp_buffer_in_len = list_template[list_depth].buffer_len;
@@ -737,12 +740,11 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
       len_buff_space -= len_to_tag;
 
       char tag_content[128];
-      int itterator = 0;
       int element_count = 0;
 
       if(type == tagPlain){
-        replaceTag(tag_content, itterator, element_count, tag, type, 128, list_depth);
-        if(strlen(tag_content) > len_buff_space){
+        replaceTag(tag_content, element_count, tag, type, 128, list_depth);
+        if((int)strlen(tag_content) > len_buff_space){
           len_buff_space = strlen(tag_content);
           buffer_out_len += strlen(tag_content);
           buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
@@ -776,7 +778,9 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
         // All data worth sending has been added to buffer_out.
         break;
       }
-      if(tag_start - buffer_tail > buffer_out_len - strlen(buffer_out) -1){
+      if(tag_start - buffer_tail > 
+          buffer_out_len - (int)strlen(buffer_out) -1)
+      {
         buffer_out_len += tag_start - buffer_tail;
         buffer_out = (char*)realloc((void*)buffer_out, buffer_out_len);
       }
@@ -862,7 +866,6 @@ bool CompileMustache::tagName(char* tag_start, char* tag, tagType& type){
 }
 
 void CompileMustache::replaceTag(char* destination,
-                                  int& itterator,
                                   int& element_count,
                                   const char* tag,
                                   const tagType type,
@@ -1079,7 +1082,7 @@ void CompileMustache::replaceTag(char* destination,
       element_count = list_size[list_depth];
     }
   } else if(strcmp(tag, "host.ssids") == 0){
-    int now = millis() / 10000;  // 10 Second intervals.
+    unsigned int now = millis() / 10000;  // 10 Second intervals.
     if(list_size[list_depth] < 0 || now != list_cache_time[list_depth]){
       list_cache_time[list_depth] = now;
       list_size[list_depth] = WiFi.scanNetworks();
@@ -1313,8 +1316,8 @@ void CompileMustache::replaceTag(char* destination,
 }
 
 void CompileMustache::enterList(char* parents, char* tag){
-  strcat(list_parent, "|");
-  strcat(list_parent, tag);
+  strcat(parents, "|");
+  strcat(parents, tag);
 }
 
 void CompileMustache::exitList(char* parents){

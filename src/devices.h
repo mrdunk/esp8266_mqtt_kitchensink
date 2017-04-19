@@ -23,7 +23,9 @@
 #define ESP8266__DEVICES_H
 
 #include <Arduino.h>  // String
-#include "mqtt.h"
+#include <ESP8266WiFi.h>
+//#include "mqtt.h"
+#include "config.h"
 
 
 struct Address_Segment {
@@ -46,6 +48,7 @@ struct Connected_device {
   int io_value;
   int io_default;
   bool inverted;
+  bool dirty;          // Data has changed since last announced IO pin.
 
   void setType(const String& type);
   void setInverted(const String& value);
@@ -70,7 +73,8 @@ void SetDevice(const unsigned int index, Connected_device& device);
 
 class Io{
  public:
-  Io(Mqtt* mqtt_) : mqtt(mqtt_){
+  //Io(Mqtt* mqtt_) : mqtt(mqtt_){
+  Io(){
     // Set these to an unlikely value so pins get initialised first time Io::setup() is called.
     memset(pin_modes, 255, 16);
   };
@@ -81,12 +85,13 @@ class Io{
   void registerCallback(void(*callback_)()){ callback = callback_; }
   void inputCallback();
   void toAnnounce(const Connected_device& device, String& topic, String& payload);
+  bool getOutput(String& return_topic, String& return_payload);
  private:
   void (*callback)();
   void setPinMode(uint8_t iopin, uint8_t mode);
   void setPinAnalog(uint8_t iopin, int value);
   bool dirty_inputs;
-  Mqtt* mqtt;
+  //Mqtt* mqtt;
   unsigned int last_update;
   uint8_t pin_modes[16];
   int pin_analog_value[16];

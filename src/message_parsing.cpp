@@ -21,7 +21,7 @@
 
 #include <ArduinoJson.h>        // ArduinoJson library.
 #include "message_parsing.h"
-
+#include "ipv4_helpers.h"
 
 void parse_topic(const char* subscribeprefix,
                  const char* topic,
@@ -130,8 +130,10 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
   topic.toCharArray(topic_char, topic.length() +1);
   parse_topic(config->subscribeprefix, topic_char, address_segments);
 
-  if(strncmp(address_segments[0].segment, "hosts", NAME_LEN) == 0 ||
-      strncmp(address_segments[0].segment, "_all", NAME_LEN) == 0)
+  if((strncmp(address_segments[0].segment, "hosts", NAME_LEN) == 0 ||
+      strncmp(address_segments[0].segment, "_all", NAME_LEN) == 0) &&
+      (strncmp(address_segments[1].segment, config->hostname, NAME_LEN) == 0 ||
+       strncmp(address_segments[1].segment, "_all", NAME_LEN) == 0))
   {
     if(command == "solicit"){
       //Serial.println("Announce host.");

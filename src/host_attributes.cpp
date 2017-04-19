@@ -24,13 +24,14 @@
 
 #include "host_attributes.h"
 #include "serve_files.h"
+#include "ipv4_helpers.h"
 
 extern Config config;
 
 
 // Ensure buffer contains only valid hostname characters.
 void sanitizeHostname(char* buffer){
-  for(int i=0; i< strlen(buffer);i++){
+  for(unsigned int i=0; i < strlen(buffer);i++){
     if(buffer[i] >= 'A' && buffer[i] <= 'Z'){
       buffer[i] = buffer[i] + 'a' - 'A';
     } else if(buffer[i] >= 'a' && buffer[i] <= 'z'){
@@ -70,7 +71,7 @@ void Config::clear(){
   subscribeprefix[0] = '\0';
   publishprefix[0] = '\0';
   for(int i = 0; i < MAX_DEVICES; i++){
-    devices[i] = (const Connected_device){0};
+    devices[i] = (const Connected_device){{0},Io_Type::test,0,0,0,false,true};
   }
   firmwarehost[0] = '\0';
   firmwaredirectory[0] = '\0';
@@ -83,10 +84,7 @@ void Config::clear(){
 
 
 
-bool Config::testValue(const String& parent,
-                       const String& key,
-                       const String& value)
-{
+bool Config::testValue(const String& parent, const String& key){
   if(parent == "root"){
     if(key == "hostname" ||
        key == "ip" ||
@@ -288,7 +286,7 @@ bool Config::load(const String& filename, bool test){
   String parent = "root";
   String key = "";
   String value = "";
-  Connected_device device = (const Connected_device){0};
+  Connected_device device = (const Connected_device){{0},Io_Type::test,0,0,0,false,true};
 
   while(file.available() || line != "") {
     // Remove any preceding "," which are left from previous iterations.
@@ -306,7 +304,7 @@ bool Config::load(const String& filename, bool test){
     } else if(getKeyValue(line, key, value)){
       key.toLowerCase();
       //Serial.printf("%i:%s  %s : %s\n", level, parent.c_str(), key.c_str(), value.c_str());
-      if((test and !testValue(parent, key, value)) || !setValue(parent, key, value, device)){
+      if((test and !testValue(parent, key)) || !setValue(parent, key, value, device)){
         error = true;
         Serial.printf("Problem in file: %s  on line: %i\n", filename.c_str(), line_num);
         Serial.printf("  near: \"%s\"\n", line.c_str());
@@ -325,7 +323,7 @@ bool Config::load(const String& filename, bool test){
     } else if(enterList(line, inside_list, list_index, level)) {
       if(!test && list_index != previous_list_index){
         insertDevice(device);
-        device = (const Connected_device){0};
+        device = (const Connected_device){{0},Io_Type::test,0,0,0,false,true};
         previous_list_index = list_index;
       }
           

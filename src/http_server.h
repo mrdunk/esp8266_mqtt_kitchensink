@@ -24,6 +24,7 @@
 
 #include "host_attributes.h"
 #include "mdns_actions.h"
+#include "mqtt.h"
 
 #define TAG_NAME_LEN 64
 #define MAX_LIST_RECURSION 4 
@@ -83,7 +84,6 @@ class CompileMustache{
 
   /* Replace a {{tag}} with the string in tag_content. */
   void replaceTag(char* destination,
-                   int& itterator,
                    int& element_count,
                    const char* tag,
                    const tagType type,
@@ -112,21 +112,21 @@ class CompileMustache{
   }
 
  private:
-  bool success;
-  int buffer_size;
-  int head;
-  int tail;
   char* buffer;
+  int buffer_size;
   Config* config;
   MdnsLookup* brokers;
   mdns::MDns* mdns;
   Mqtt* mqtt;
   Io* io;
-  int list_element[MAX_LIST_RECURSION];  
-  int list_size[MAX_LIST_RECURSION];
-  int list_cache_time[MAX_LIST_RECURSION];
   char list_parent[128];
   const String& session_token; 
+  bool success;
+  int head;
+  int tail;
+  int list_element[MAX_LIST_RECURSION];  
+  int list_size[MAX_LIST_RECURSION];
+  unsigned int list_cache_time[MAX_LIST_RECURSION];
 
   bool myMemmove(char* destination, char* source, int len);
 

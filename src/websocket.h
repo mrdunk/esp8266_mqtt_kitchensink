@@ -23,12 +23,18 @@
 #define ESP8266__WEBSOCKET_H
 
 #include <WebSocketsServer.h>   // WebSockets library.
+#include "message_parsing.h"
 
 extern WebSocketsServer webSocket;
 extern Io io;
-
+extern Config config;
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  String return_topics[MAX_DEVICES +1];
+  String return_payloads[MAX_DEVICES +1];
+  String topic = "";
+  String payload_string((char*)payload);
+
 	switch(type) {
 		case WStype_DISCONNECTED:
 			Serial.printf("[%u] Disconnected!\n", num);
@@ -46,8 +52,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 		case WStype_TEXT:
 			Serial.printf("[%u] get Text: %s\n", num, payload);
 
-			// send message to client
-			webSocket.sendTXT(num, "message here");
+      actOnMessage(&io, &config, topic, payload_string, return_topics, return_payloads);
+      for(int i = 0; i < MAX_DEVICES +1; i++){
+        if(return_topics[i] != "" || return_payloads[i] != ""){
+          // send message to client
+          webSocket.sendTXT(num, return_topics[i]);
+          webSocket.sendTXT(num, return_payloads[i]);
+        }
+      }
 
 			// send data to all connected clients
 			// webSocket.broadcastTXT("message here");

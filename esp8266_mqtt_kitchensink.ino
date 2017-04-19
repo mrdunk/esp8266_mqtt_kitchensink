@@ -82,7 +82,8 @@ void mqttCallback(const char* topic, const byte* payload, const unsigned int len
 }
 
 // IO
-Io io(&mqtt);
+//Io io(&mqtt);
+Io io;
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
@@ -272,7 +273,14 @@ void loop(void) {
     io.loop();
     my_mdns.loop();
     http_server.loop();
-
     webSocket.loop();
+
+    String topic;
+    String payload;
+    while(io.getOutput(topic, payload)){
+      webSocket.broadcastTXT(topic);
+      webSocket.broadcastTXT(payload);
+      mqtt.publish(topic, payload);
+    }
   }
 }

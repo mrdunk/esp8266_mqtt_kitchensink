@@ -53,8 +53,7 @@ struct Config {
                 const String& value,
                 Connected_device& device);
  bool testValue(const String& parent,
-                const String& key,
-                const String& value);
+                const String& key);
   void clear();
   bool load(const String& filename="/config.cfg", bool test=false);
   bool save(const String& filename="/config.cfg");
