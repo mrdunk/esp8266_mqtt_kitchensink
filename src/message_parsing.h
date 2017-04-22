@@ -37,6 +37,7 @@ void parse_topic(const char* subscribeprefix,
 bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2);
 
 // Presuming payload is JSON formatted, return value for corresponding key.
+String valueFromStringPayload(const String& payload, const String& key);
 String value_from_payload(const byte* payload, const unsigned int length, const String key);
 
 void actOnMessage(Io* io, Config* config, String& topic, const String& payload,

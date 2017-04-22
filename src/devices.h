@@ -36,7 +36,7 @@ enum Io_Type {
   test,
   onoff,
   pwm,
-  input_pullup,
+  inputpullup,
   input,
   timer
 };

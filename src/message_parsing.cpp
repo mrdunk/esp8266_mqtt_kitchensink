@@ -79,8 +79,7 @@ bool compare_addresses(const Address_Segment* address_1, const Address_Segment* 
 }
   
 String valueFromStringPayload(const String& payload, const String& key) {
-  Serial.println(payload);
-  StaticJsonBuffer<200> jsonBuffer;
+  StaticJsonBuffer<255> jsonBuffer;
 
   JsonObject& root = jsonBuffer.parseObject(payload);
   if (!root.success()){
@@ -111,6 +110,9 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
                   String* return_topics, String* return_payloads)
 {
   int return_pointer = 0;
+  Serial.print(topic);
+  Serial.print(" : ");
+  Serial.println(payload);
 
   if(topic == ""){
     topic = valueFromStringPayload(payload, "_subject");

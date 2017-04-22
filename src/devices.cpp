@@ -34,8 +34,8 @@ void Connected_device::setType(const String& type){
     io_type = Io_Type::onoff;
   } else if (type == "input") {
     io_type = Io_Type::input;
-  } else if (type == "inputPullUp") {
-    io_type = Io_Type::input_pullup;
+  } else if (type == "inputpullup") {
+    io_type = Io_Type::inputpullup;
   } else if (type == "timer") {
     io_type = Io_Type::timer;
   } else {
@@ -138,7 +138,7 @@ void SetDevice(const unsigned int index, struct Connected_device& device) {
 void Io::setup(){
   for(int i=0; i < MAX_DEVICES; i++){
     if (strlen(config.devices[i].address_segment[0].segment) > 0) {
-      if(config.devices[i].io_type == input_pullup){
+      if(config.devices[i].io_type == inputpullup){
         config.devices[i].io_value = 1;
         setPinMode(config.devices[i].iopin, INPUT_PULLUP);
         if(callback){
@@ -172,7 +172,7 @@ void Io::loop(){
     dirty_inputs = false;
     for(int i=0; i < MAX_DEVICES; i++){
       if (strlen(config.devices[i].address_segment[0].segment) > 0) {
-        if(config.devices[i].io_type == input || config.devices[i].io_type == input_pullup){
+        if(config.devices[i].io_type == input || config.devices[i].io_type == inputpullup){
           byte value = digitalRead(config.devices[i].iopin);
           value = (config.devices[i].inverted ? value == 0 : value);
           if(value != config.devices[i].io_value){
@@ -257,7 +257,7 @@ void Io::setState(Connected_device& device){
     Serial.print(" to value: ");
     Serial.println(device.inverted ? (255 - device.io_value) : device.io_value);
   } else if(device.io_type == input){
-  } else if(device.io_type == input_pullup){
+  } else if(device.io_type == inputpullup){
   } else if(device.io_type == timer){
     const int now = millis() / 1000;
     setPinMode(device.iopin, OUTPUT);
@@ -276,10 +276,6 @@ void Io::setState(Connected_device& device){
     }
   }
 
-	//String topic;
-  //String payload;
-	//toAnnounce(device, topic, payload);
-  //mqtt->publish(topic, payload);
   device.dirty = true;
 }
 
@@ -291,10 +287,12 @@ void Io::toAnnounce(const Connected_device& device,
                       String& topic, String& payload)
 {
   topic = config.publishprefix;
-  topic += "/lighting/_announce";
+  topic += "/io/_announce";
   
   payload = "{\"_state\":\"";
   payload += String(device.io_value);
+  payload += "\",\"_iopin\":\"";
+  payload += String(device.iopin);
   payload += "\",\"_subject\":\"";
   payload += DeviceAddress(device);
   payload += "\"}";
@@ -307,8 +305,8 @@ const String TypeToString(Io_Type type){
     return "onoff";
   } else if (type == Io_Type::input) {
     return "input";
-  } else if (type == Io_Type::input_pullup) {
-    return "inputPullUp";
+  } else if (type == Io_Type::inputpullup) {
+    return "inputpullup";
   } else if (type == Io_Type::timer) {
     return "timer";
   }

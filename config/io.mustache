@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <head>
+    <link rel="stylesheet" href="style.css">
+  </head>
+	<body>
+    <div>WS idle for {{ws_health}} seconds</div>
+    <div>WS connection state: {{ws_state}}</div>
+    <table>
+      <tr class="">
+        <th>index</th>
+        <th>io type</th>
+        <th>io number</th>
+        <th>topic</th>
+        <th>state</th>
+        <th>value</th>
+      </tr>
+    
+      {{#io.entry}}
+      {{#is_populated}}
+      <tr class="device_{{index}}">
+        <td>{{index}}</td>
+        <td>
+          {{#is_input}}
+            input:
+          {{/is_input}}
+          {{#is_output}}
+            output:
+          {{/is_output}}
+          {{iotype}}
+        </td>
+        <td>{{iopin}}</td>
+        <td>{{config.subscribeprefix}}/{{topic}}</td>
+        <td>
+          <div class="ws_iopin_{{iopin}}_zero" style="background-color:red;">Off</div>
+          <div class="ws_iopin_{{iopin}}_positive" style="background-color:green;">On</div>
+        </td>
+        <td>
+          <div class="iopin_{{iopin}}_value">{{ws_value}}</div>
+        </td>
+      </tr>
+      {{/is_populated}}
+    {{/io.entry}}
+    </table>
+
+    <div id="log"></div>
+  </body>
+  <script src="websockets.js"></script>
+</html>

@@ -37,12 +37,12 @@
 #define NAME_LEN 16
 
 // Each device has an address in the form 'role/location1/location2/etc'
-// eg: 'lighting/kitchen/worktop/left'.
+// eg: 'io/kitchen/worktop/left'.
 // These map to the second half of the MQTT topic.
 #define ADDRESS_SEGMENTS 6
 
 // MQTT topics will start with a prefix.
-// eg: in the topic 'homeautomation/0/lighting/kitchen/worktop/left',
+// eg: in the topic 'homeautomation/0/io/kitchen/worktop/left',
 //     'homeautomation/0' maps to the prefix.
 #define PREFIX_LEN 32
 

@@ -656,7 +656,7 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
             !findPattern(last_tag_start +1, "}}", strnlen(last_tag_start +1,
                          buffer_in + buffer_in_len - tmp_last_tag_start -1)))
         {
-          // The closing tag overlaps buffer boundary.
+          // The closing tag either overlaps buffer boundary or not in buffer at all.
           len = last_tag_start - buffer_tail;
         }
       }
@@ -687,6 +687,12 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
           buffer_tail += len;
         }
 
+        if(list_depth > 1){
+          Serial.print("WARNING: Can not find closing tag: ");
+          Serial.print("{{/");
+          Serial.print(list_template[list_depth].tag);
+          Serial.println("}}");
+        }
         break;
       }
 
@@ -798,7 +804,6 @@ void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
   }
 
   memmove(buffer_in, buffer_tail, strlen(buffer_tail) +1);
-
 }
 
 char* CompileMustache::findClosingTag(char* buffer_in, const int buffer_in_len,
@@ -1119,21 +1124,40 @@ void CompileMustache::replaceTag(char* destination,
     if(type == tagListItem){
       list_element[list_depth]++;
       element_count = list_size[list_depth];
-    } else {
+    } else if(type == tagEnd || type == tagList){
       list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
+    } else {
+      int context_depth = depthOfParent(list_parent, "|io.entry");
+      int selected_value = config->devices[list_element[context_depth]].iopin;
+      String(selected_value).toCharArray(destination, len);
+      element_count = 1;
     }
   } else if(strcmp(tag, "iotype") == 0){
     list_size[list_depth] = 6;
     if(type == tagListItem){
       list_element[list_depth]++;
       element_count = list_size[list_depth];
-    } else {
+    } else if(type == tagEnd || type == tagList){
       list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
+    } else {
+      char values[][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
+      int context_depth = depthOfParent(list_parent, "|io.entry");
+      Io_Type selected_value = config->devices[list_element[context_depth]].io_type;
+      String(values[selected_value]).toCharArray(destination, len);
+      element_count = 1;
     }
+  } else if(strcmp(tag, "ws_health") == 0){
+    String div = "<span class=\"ws_health\">ws_health</span>";
+    div.toCharArray(destination, len);
+    element_count = 1;
+  } else if(strcmp(tag, "ws_state") == 0){
+    String div = "<span class=\"ws_state\">ws_state</span>";
+    div.toCharArray(destination, len);
+    element_count = 1;
   }
 
   // The following tags work inside lists.
@@ -1142,6 +1166,7 @@ void CompileMustache::replaceTag(char* destination,
 
     // Not every config->devices entry is populated.
     int index = config->labelToIndex(list_element[parent_depth]);
+    Serial.println(index);
 
     if(strcmp(tag, "index") == 0){
       String(index).toCharArray(destination, len);
@@ -1155,6 +1180,41 @@ void CompileMustache::replaceTag(char* destination,
     } else if(strcmp(tag, "inverted") == 0){
       String(config->devices[index].inverted ? "Y":"N").toCharArray(destination, len);
       element_count = config->devices[index].inverted;
+    } else if(strcmp(tag, "is_populated") == 0){
+      bool is_populated = (bool)DeviceAddress(config->devices[index]).length();
+      String(is_populated ? "Y":"N").toCharArray(destination, len);
+      element_count = (int)is_populated;
+    } else if(strcmp(tag, "is_input") == 0){
+      bool is_input = (config->devices[index].io_type == Io_Type::inputpullup ||
+                      config->devices[index].io_type == Io_Type::input);
+      String(is_input ? "Y":"N").toCharArray(destination, len);
+      element_count = (int)is_input;
+    } else if(strcmp(tag, "is_output") == 0){
+      bool is_output = (config->devices[index].io_type == Io_Type::onoff ||
+                      config->devices[index].io_type == Io_Type::pwm);
+      String(is_output ? "Y":"N").toCharArray(destination, len);
+      element_count = (int)is_output;
+    } else if(strcmp(tag, "value") == 0){
+      int output = 0;
+      if(config->devices[index].io_type == Io_Type::inputpullup ||
+          config->devices[index].io_type == Io_Type::input ||
+          config->devices[index].io_type == Io_Type::onoff)
+      {
+        output = (bool)config->devices[index].io_value ^ config->devices[index].inverted;
+      } else if(config->devices[index].io_type == Io_Type::pwm)
+      {
+        output = config->devices[index].io_value;
+      }
+      String(output).toCharArray(destination, len);
+      element_count = (int)output;
+    } else if(strcmp(tag, "ws_value") == 0){
+      String div = "<div class=\"ws_iopin_";
+      div += String(config->devices[index].iopin);
+      div += "_value\">iopin_";
+      div += String(config->devices[index].iopin);
+      div += "_value</div>";
+      div.toCharArray(destination, len);
+      element_count = 1;
     }
   }
 

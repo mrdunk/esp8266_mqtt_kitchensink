@@ -278,8 +278,7 @@ void loop(void) {
     String topic;
     String payload;
     while(io.getOutput(topic, payload)){
-      webSocket.broadcastTXT(topic);
-      webSocket.broadcastTXT(payload);
+      wsPublish(topic, payload);
       mqtt.publish(topic, payload);
     }
   }
