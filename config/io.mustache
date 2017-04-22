@@ -15,6 +15,7 @@
         <th>topic</th>
         <th>state</th>
         <th>value</th>
+        <th>set</th>
       </tr>
     
       {{#io.entry}}
@@ -31,7 +32,7 @@
           {{iotype}}
         </td>
         <td>{{iopin}}</td>
-        <td>{{config.subscribeprefix}}/{{topic}}</td>
+        <td>{{config.publishprefix}}/{{topic}}</td>
         <td>
           <div class="ws_iopin_{{iopin}}_zero" style="background-color:red;">Off</div>
           <div class="ws_iopin_{{iopin}}_positive" style="background-color:green;">On</div>
@@ -39,10 +40,14 @@
         <td>
           <div class="iopin_{{iopin}}_value">{{ws_value}}</div>
         </td>
+        <td><div class="{{ws_set_toggle}}"
+                 topic={{config.publishprefix}}/{{topic}}>clickme</div></td>
       </tr>
       {{/is_populated}}
     {{/io.entry}}
     </table>
+
+    <br/>
 
     <div id="log"></div>
   </body>

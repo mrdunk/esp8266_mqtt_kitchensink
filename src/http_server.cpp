@@ -1166,7 +1166,6 @@ void CompileMustache::replaceTag(char* destination,
 
     // Not every config->devices entry is populated.
     int index = config->labelToIndex(list_element[parent_depth]);
-    Serial.println(index);
 
     if(strcmp(tag, "index") == 0){
       String(index).toCharArray(destination, len);
@@ -1214,6 +1213,24 @@ void CompileMustache::replaceTag(char* destination,
       div += String(config->devices[index].iopin);
       div += "_value</div>";
       div.toCharArray(destination, len);
+      element_count = 1;
+    } else if(strcmp(tag, "ws_set_high") == 0){
+      String div = "<div class=\"ws_iopin_";
+      div += String(config->devices[index].iopin);
+      div += "_set_high\">click me</div>";
+      div.toCharArray(destination, len);
+      element_count = 1;
+    } else if(strcmp(tag, "ws_set_low") == 0){
+      String div = "<div class=\"ws_iopin_";
+      div += String(config->devices[index].iopin);
+      div += "_set_low\">click me</div>";
+      div.toCharArray(destination, len);
+      element_count = 1;
+    } else if(strcmp(tag, "ws_set_toggle") == 0){
+      String class_id = "ws_iopin_";
+      class_id += String(config->devices[index].iopin);
+      class_id += "_set_toggle";
+      class_id.toCharArray(destination, len);
       element_count = 1;
     }
   }

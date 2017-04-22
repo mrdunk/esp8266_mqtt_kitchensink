@@ -31,6 +31,14 @@ function parsePayload(payload, log){
   return message;
 }
 
+function setIo(){
+  console.log(this);
+  var payload = {_command: !Boolean(parseInt(this.value)),
+                 _subject: this.topic};
+  console.log(payload);
+  websocket.send(JSON.stringify(payload));
+}
+
 function updatePage(payload){
   var class_key = "";
 
@@ -63,6 +71,13 @@ function updatePage(payload){
     for(var i=0; i < document.getElementsByClassName(class_key).length; i++){
       var match = document.getElementsByClassName(class_key)[i];
       match.innerHTML = payload._state;
+    }
+
+    class_key = "ws_iopin_" + payload._iopin + "_set_toggle";
+    for(var i=0; i < document.getElementsByClassName(class_key).length; i++){
+      var match = document.getElementsByClassName(class_key)[i];
+      match.style.cursor = "pointer";
+      match.onclick = setIo.bind({topic: match.getAttribute("topic"), value: payload._state});
     }
   }
 }
@@ -190,6 +205,7 @@ function wsInit() {
   console.log("wsInit()");
 
   var log = document.getElementById("log");
+  log.innerHTML = "Log:";
   ws_data_timer = Date.now();
   wsStart();
   window.setInterval(wsCheck, 2000);

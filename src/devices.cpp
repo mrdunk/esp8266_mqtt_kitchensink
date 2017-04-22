@@ -220,7 +220,7 @@ void Io::changeState(Connected_device& device, String command){
     device.io_value = 255;
   } else if(command == "off" || command == "false"){
     device.io_value = 0;
-  } else if (device.io_value > 255 || device.io_value < 0) {
+  } else if (device.io_value > 255 || device.io_value <= 0) {
     device.io_value = 0;
   }
   setState(device);

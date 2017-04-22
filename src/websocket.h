@@ -87,5 +87,10 @@ void wsPublish(String& topic, String& payload){
   webSocket.broadcastTXT(topic + " : " + payload);
 }
 
+/*void wsSetIo(io_pin_topic, value){
+  var payload = "{\"_command\":\"" + value + "\"}";
+  webSocket.broadcastTXT(topic + " : " + payload);
+}*/
+
 
 #endif  // ESP8266__WEBSOCKET_H
