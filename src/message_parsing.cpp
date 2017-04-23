@@ -23,21 +23,55 @@
 #include "message_parsing.h"
 #include "ipv4_helpers.h"
 
-void parse_topic(const char* subscribeprefix,
-                 const char* topic,
+void parse_topic(char* subscribeprefix,
+                 char* topic,
                  Address_Segment* address_segments){
   // We only care about the part of the topic without the prefix
-  // so check how many segments there are in subscribeprefix
-  // so we can ignore that many segments later.
-  int i, segment = 0;
-  if(strlen(subscribeprefix)){
-    for (i=0, segment=-1; subscribeprefix[i]; i++){
-      segment -= (subscribeprefix[i] == '/');
+  // so mark any segments matching the prefix to be ignored.
+  int segment = 0;
+  char* prefix_start = subscribeprefix;
+  char* topic_start = topic;
+  //char prefix_tmp[128];
+  //char topic_tmp[128];
+  while(prefix_start < subscribeprefix + strlen(subscribeprefix) &&
+      topic_start < topic + strlen(topic)){
+    char* prefix_end = strchr(prefix_start, '/');
+    char* topic_end = strchr(topic_start, '/');
+    if(!prefix_end){
+      prefix_end = subscribeprefix + strlen(subscribeprefix);
     }
+    if(!topic_end){
+      topic_end = topic + strlen(topic);
+    }
+
+    //memset(prefix_tmp, '\0', 128);
+    //memset(topic_tmp, '\0', 128);
+    //strncpy(prefix_tmp, prefix_start, prefix_end - prefix_start);
+    //strncpy(topic_tmp, topic_start, topic_end - topic_start);
+
+    //Serial.print(prefix_tmp);
+    //Serial.print("\t<>\t");
+    //Serial.print(topic_tmp);
+    //Serial.print("\t");
+
+    if(strncmp(prefix_start, "+", prefix_end - prefix_start) == 0){
+      //Serial.println("Match");
+      segment--;
+    } else if(strncmp(prefix_start, topic_start, prefix_end - prefix_start) == 0){
+      //Serial.println("Match");
+      segment--;
+    } else {
+      // No match.
+      //Serial.println("nope");
+      segment = 0;
+      break;
+    }
+
+    prefix_start = prefix_end +1;
+    topic_start = topic_end +1;
   }
 
-  // Casting non-const here as we don't actually modify topic.
-  char* p_segment_start = (char*)topic;
+  char* p_segment_start = topic;
   char* p_segment_end = strchr(topic, '/');
   while(p_segment_end != NULL){
     if(segment >= 0){
@@ -60,30 +94,47 @@ void parse_topic(const char* subscribeprefix,
 }
 
 bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2){
+  for(int s=0; s < ADDRESS_SEGMENTS; s++){
+    if(strlen(address_1[s].segment) == 0 && strlen(address_2[s].segment) == 0){
+      break;
+    }
+    Serial.print(address_1[s].segment);
+    Serial.print("\t\t");
+    Serial.println(address_2[s].segment);
+  }
+
   if(strlen(address_2[0].segment) <= 0){
+    Serial.println("nope");
     return false;
   }
   if(strcmp(address_1[0].segment, "_all") != 0 &&
       strcmp(address_1[0].segment, address_2[0].segment) != 0){
+    Serial.println("nope");
     return false;
   }
   for(int s=1; s < ADDRESS_SEGMENTS; s++){
     if(strcmp(address_1[s].segment, "_all") == 0){
+      Serial.println("match");
       return true;
     }
     if(strcmp(address_1[s].segment, address_2[s].segment) != 0){
+      Serial.println("nope");
       return false;
     }
   }
+  Serial.println("match");
   return true;
 }
   
 String valueFromStringPayload(const String& payload, const String& key) {
-  StaticJsonBuffer<255> jsonBuffer;
+  StaticJsonBuffer<300> jsonBuffer;
 
   JsonObject& root = jsonBuffer.parseObject(payload);
   if (!root.success()){
-    Serial.println("parseObject() failed");
+    Serial.print("parseObject() failed. ");
+    Serial.print(payload);
+    Serial.print("  ");
+    Serial.println(key);
     return "";
   }
 
@@ -132,22 +183,21 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
   topic.toCharArray(topic_char, topic.length() +1);
   parse_topic(config->subscribeprefix, topic_char, address_segments);
 
-  if((strncmp(address_segments[0].segment, "hosts", NAME_LEN) == 0 ||
-      strncmp(address_segments[0].segment, "_all", NAME_LEN) == 0) &&
-      (strncmp(address_segments[1].segment, config->hostname, NAME_LEN) == 0 ||
-       strncmp(address_segments[1].segment, "_all", NAME_LEN) == 0))
-  {
+  Address_Segment host_all[ADDRESS_SEGMENTS] = {"hosts","_all"};
+  if(compare_addresses(address_segments, host_all)){
     if(command == "solicit"){
       //Serial.println("Announce host.");
       toAnnounceHost(config, return_topics[return_pointer], return_payloads[return_pointer]);
       return_pointer++;
+    } else if(command == "learn"){
+      Serial.println(payload);
     }
   }
 
   for (int i = 0; i < MAX_DEVICES; ++i) {
 		if(compare_addresses(address_segments, config->devices[i].address_segment)){
-      //Serial.print("Matches: ");
-			//Serial.println(i);
+      Serial.print("Matches: ");
+			Serial.println(i);
 
 			if(command != "solicit"){
 				io->changeState(config->devices[i], command);

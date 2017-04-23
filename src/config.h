@@ -59,7 +59,7 @@
 #define HTTP_PORT 80
 
 // Buffer size. Buffer is used by both mDNS and HTTP server.
-#define BUFFER_SIZE 1000
+#define BUFFER_SIZE 400
 
 // Maximum length of a MQTT topic.
 #define MAX_TOPIC_LENGTH  (PREFIX_LEN + ((NAME_LEN +1) * ADDRESS_SEGMENTS) +1)

@@ -1,8 +1,11 @@
+var log;
 var websocket = null;
 var ws_data_timer;
 var ws_start_timer;
 var MAX_TIME = 10 * 1000;
 var counter = 0;
+var wsMessages = [];
+var wsMessagesTimer;
 
 function wsCodes(value){
   var codes = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
@@ -36,7 +39,7 @@ function setIo(){
   var payload = {_command: !Boolean(parseInt(this.value)),
                  _subject: this.topic};
   console.log(payload);
-  websocket.send(JSON.stringify(payload));
+  wsQueueSend(JSON.stringify(payload));
 }
 
 function updatePage(payload){
@@ -151,7 +154,7 @@ function wsStart(){
     var publishprefix = "homeautomation/0/";
     var solicit_topic = publishprefix + "_all/_all";
     var message = "{\"_command\":\"solicit\", \"_subject\" : \"" + solicit_topic + "\"}";
-    websocket.send(message);
+    wsQueueSend(message);
 	};
 
   websocket.onmessage = function(evt) {
@@ -204,12 +207,52 @@ function wsCheck(){
 function wsInit() {
   console.log("wsInit()");
 
-  var log = document.getElementById("log");
-  log.innerHTML = "Log:";
+  log = document.getElementById("log");
+  if(log){
+    log.innerHTML = "Log:";
+  }
   ws_data_timer = Date.now();
   wsStart();
   window.setInterval(wsCheck, 2000);
 };
+
+function wsQueueSend(message){
+  console.log("wsQueueSend(", message, ")", wsMessages.length, wsMessagesTimer);
+
+  if(message !== undefined){
+    wsMessages.push(message);
+  }
+  if(wsMessagesTimer === undefined){
+    wsSend();
+  }
+}
+
+function wsSend(){
+  console.log("wsSend()", wsMessages.length, websocket.readyState, wsMessagesTimer);
+  if(wsMessages.length === 0){
+    wsMessagesTimer = undefined;
+   return;
+  }
+  if(websocket.readyState !== WebSocket.OPEN){
+    wsMessagesTimer = setTimeout(wsSend, 1000);
+    return;
+  }
+  console.log("wsSend()");
+
+  var popped;
+  try{
+    popped = wsMessages.pop();
+    websocket.send(popped);
+    if(log){
+      log.innerHTML += "<p style='color: green;'>> WS publish: " + popped + "</p>";
+    }
+  }catch(err){
+    console.log(err);
+    wsMessages.push(popped);
+  }
+
+  wsMessagesTimer = setTimeout(wsSend, 1000);
+}
 
 
 window.addEventListener("load", wsInit, false);

@@ -59,6 +59,47 @@ class MyESP8266WebServer : public ESP8266WebServer{
   }
 };
 
+class HttpServer{
+ public:
+  HttpServer(char* _buffer, 
+             const int _buffer_size,
+             Config* _config,
+             MdnsLookup* _brokers,
+             mdns::MDns* _mdns,
+             Mqtt* _mqtt,
+             Io* _io);
+  void loop();
+ private:
+  MyESP8266WebServer esp8266_http_server;
+  void onTest();
+  void pullFiles();
+  void handleLogin();
+  bool isAuthentified(bool redirect=true);
+  void handleNotFound();
+  void onFileOperations(const String& _filename = "");
+  void fileBrowser();
+  void onRoot();
+  const String mime(const String& filename);
+  void onSet();
+  void onReset();
+  bool fileOpen(const String& filename);
+  bool fileRead(char* buffer_in, const int buffer_in_len);
+  void fileClose();
+  File file;
+  char* buffer;
+  const int buffer_size;
+  Config* config;
+  MdnsLookup* brokers;
+  mdns::MDns* mdns;
+  Mqtt* mqtt;
+  Io* io;
+  void bufferClear();
+  bool bufferAppend(const String& to_add);
+  bool bufferAppend(const char* to_add);
+  bool bufferInsert(const String& to_insert);
+  bool bufferInsert(const char* to_insert);
+};
+
 /* Uses Mustache style templates for generating web pages.
  * http://mustache.github.io/mustache.5.html
  * */
@@ -121,59 +162,18 @@ class CompileMustache{
   Io* io;
   char list_parent[128];
   const String& session_token; 
-  bool success;
   int head;
   int tail;
   int list_element[MAX_LIST_RECURSION];  
   int list_size[MAX_LIST_RECURSION];
   unsigned int list_cache_time[MAX_LIST_RECURSION];
 
-  bool myMemmove(char* destination, char* source, int len);
-
   List list_template[MAX_LIST_RECURSION];
 };
 
 
-class HttpServer{
- public:
-  HttpServer(char* _buffer, 
-             const int _buffer_size,
-             Config* _config,
-             MdnsLookup* _brokers,
-             mdns::MDns* _mdns,
-             Mqtt* _mqtt,
-             Io* _io);
-  void loop();
- private:
-  MyESP8266WebServer esp8266_http_server;
-  void onTest();
-  void handleLogin();
-  bool isAuthentified(bool redirect=true);
-  void handleNotFound();
-  void onFileOperations(const String& _filename = "");
-  void fileBrowser();
-  void onRoot();
-  const String mime(const String& filename);
-  void onSet();
-  void onReset();
-  bool fileOpen(const String& filename);
-  bool fileRead(char* buffer_in, const int buffer_in_len);
-  void fileClose();
-  File file;
-  char* buffer;
-  const int buffer_size;
-  Config* config;
-  MdnsLookup* brokers;
-  mdns::MDns* mdns;
-  Mqtt* mqtt;
-  Io* io;
-  void bufferClear();
-  bool bufferAppend(const String& to_add);
-  bool bufferAppend(const char* to_add);
-  bool bufferInsert(const String& to_insert);
-  bool bufferInsert(const char* to_insert);
-};
-
+// Ensure buffer contains only valid filename characters.
+bool sanitizeFilename(const String& buffer);
 
 
 #endif  // ESP8266__HTTP_SERVER__H

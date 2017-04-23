@@ -48,8 +48,9 @@ bool getPage(const String& filename, File& file, const Config& config) {
 
   // If there are incoming bytes, print them
 	while (wifiClient.connected()){
-		if (wifiClient.available())
-		{
+    Serial.print(".");
+    wdt_reset();
+		if(wifiClient.available()){
 			String line = wifiClient.readStringUntil('\n');
 
       if(!header_received){
@@ -82,6 +83,7 @@ bool getPage(const String& filename, File& file, const Config& config) {
       }
     }
   }
+  Serial.println("done");
   wifiClient.stop();
 
   return true;
@@ -125,7 +127,8 @@ bool pullFile(const String& filename, const Config& config){
   }
 
 	file.close();
-  Serial.println("Done saving config file.");
+  Serial.print("Done saving file: ");
+  Serial.println(filename);
   return true;
 }
 

@@ -31,6 +31,7 @@
 
 
 extern void setPullFirmware(bool pull);
+extern WiFiClient wifiClient;
 
 HttpServer::HttpServer(char* _buffer,
                        const int _buffer_size,
@@ -55,16 +56,21 @@ HttpServer::HttpServer(char* _buffer,
   esp8266_http_server.on("/reset", [&]() {onReset();});
   esp8266_http_server.on("/reset/", [&]() {onReset();});
   esp8266_http_server.on("/get", [&]() {onFileOperations();});
+  esp8266_http_server.on("/pull", [&]() {pullFiles();});
   esp8266_http_server.on("/login", [&]() {handleLogin();});
-  esp8266_http_server.on("/isauth", [&]() {if(isAuthentified()){
-                                             esp8266_http_server.send(200, "text/plain", "auth OK");
-                                           } else {
-                                           esp8266_http_server.send(200, "text/plain", "no auth"); 
-                                           }
-                                           });
-  esp8266_http_server.on("/auth", [&]() {if(!esp8266_http_server.authenticate("test", "test"))
-                                           return esp8266_http_server.requestAuthentication();
-                                         esp8266_http_server.send(200, "text/plain", "Login OK");});
+  esp8266_http_server.on("/isauth", [&]() {
+      if(isAuthentified()){
+        esp8266_http_server.send(200, "text/plain", "auth OK");
+      } else {
+        esp8266_http_server.send(200, "text/plain", "no auth"); 
+      }
+  });
+  esp8266_http_server.on("/auth", [&]() {
+      if(!esp8266_http_server.authenticate("test", "test")){
+        return esp8266_http_server.requestAuthentication();
+      }
+      esp8266_http_server.send(200, "text/plain", "Login OK");
+  });
   esp8266_http_server.onNotFound([&]() {handleNotFound();});
 
   const char * headerkeys[] = {"User-Agent", "Cookie", "Referer"} ;
@@ -74,6 +80,116 @@ HttpServer::HttpServer(char* _buffer,
 
   esp8266_http_server.begin();
   bufferClear();
+}
+
+void HttpServer::pullFiles(){
+  bufferClear();
+
+  bool header_received = false;
+  int status_code = 0;
+  String content_type = "";
+
+  char firmwarehost[64];
+  strncpy(firmwarehost, config->firmwarehost, 64);
+  uint16_t firmwareport = config->firmwareport;
+  String firmwaredirectory = config->firmwaredirectory;
+
+  if(esp8266_http_server.hasArg("firmwarehost")){
+    esp8266_http_server.arg("firmwarehost").toCharArray(firmwarehost, 64);
+  }
+  if(esp8266_http_server.hasArg("firmwareport")){
+    firmwareport = esp8266_http_server.arg("firmwareport").toInt();
+  }
+  if(esp8266_http_server.hasArg("firmwaredirectory")){
+    firmwaredirectory = esp8266_http_server.arg("firmwaredirectory");
+  }
+
+  if(firmwareport == 0){
+    firmwareport = 80;
+  }
+  if(firmwaredirectory == ""){
+    firmwaredirectory = "/";
+  }
+
+  // Send headers to start http connection.
+  esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  if(esp8266_http_server.hasArg("action") and
+      esp8266_http_server.arg("action") == "compiled_source"){
+    esp8266_http_server.send(200, "text/plain", "");
+  } else {
+    esp8266_http_server.send(200, "text/html", "");
+  }
+
+  String session_token = esp8266_http_server.header("Cookie");
+
+  // Fetch Web page from external file server so we can re-write it with our
+  // pull requests.
+  if(wifiClient.connect(firmwarehost, firmwareport)){
+    // Make an HTTP GET request
+    wifiClient.println(String("GET ") + firmwaredirectory + " HTTP/1.1");
+    wifiClient.print("Host: ");
+    wifiClient.println(firmwarehost);
+    wifiClient.println("Connection: close");
+    wifiClient.println();
+  } else {
+    return;
+  }
+
+  // If there are incoming bytes, print them
+	while (wifiClient.connected()){
+		if(wifiClient.available()){
+			String line = wifiClient.readStringUntil('\n');
+      
+      if(!header_received){
+        line.trim();
+        if(line.startsWith("HTTP/") and line.endsWith("OK")){
+          line = line.substring(line.indexOf(" "));
+          line.trim();
+          status_code = line.substring(0, line.indexOf(" ")).toInt();
+        }
+        if(line.startsWith("Content-type:")){
+          content_type = line.substring(line.indexOf(" "));
+          content_type.trim();
+        }
+        if(line == ""){
+          if(status_code == HTTP_OK and content_type != ""){
+            header_received = true;
+            Serial.print("Status code: ");
+            Serial.println(status_code);
+            Serial.print("Content type: ");
+            Serial.println(content_type);
+            Serial.println();
+          } else {
+            Serial.println("Malformed header.");
+            return;
+          }
+        }
+      } else {
+        // Any line that contains a link should be modified.
+        int filename_start = line.indexOf("<a href=\"");
+        int filename_end;
+        String filename = "";
+        if(filename_start >= 0){
+          filename_start += strlen("<a href=\"");
+          filename_end = line.substring(filename_start).indexOf("\"");
+
+          filename = line.substring(filename_start, filename_start + filename_end);
+          if(sanitizeFilename(filename)){
+            String modified_line = line.substring(0, filename_start);
+            modified_line += "./get?filename=" + filename + "&action=pull";
+            modified_line += line.substring(filename_start + filename_end);
+            esp8266_http_server.sendContent(modified_line + "\n");
+          }
+        } else {
+          // Line does not contain link so don't modify it.
+          esp8266_http_server.sendContent(line + "\n");
+        }
+      }
+    }
+  }
+
+  esp8266_http_server.sendHeader("Connection", "close");
+  wifiClient.stop();
 }
 
 //Check if header is present and correct
@@ -187,7 +303,7 @@ void HttpServer::onFileOperations(const String& _filename){
     filename = esp8266_http_server.arg("filename");
   }
 
-  if(filename.length()){
+  if(filename.length() && sanitizeFilename(filename)){
     if(esp8266_http_server.hasArg("action") and 
           esp8266_http_server.arg("action") == "pull")
     {
@@ -257,6 +373,22 @@ void HttpServer::onFileOperations(const String& _filename){
       }
       
       esp8266_http_server.streamFile(file, "text/plain");
+
+      fileClose();
+      return;
+    } else if(esp8266_http_server.hasArg("action") and
+        esp8266_http_server.arg("action") == "no_compile")
+    {
+      Serial.print("Displaying mustache file without compiling: ");
+      Serial.println(filename);
+
+      if(!fileOpen(filename)){
+        bufferAppend("\nUnsuccessful.\n");
+        esp8266_http_server.send(404, "text/plain", buffer);
+        return;
+      }
+      
+      esp8266_http_server.streamFile(file, mime(filename));
 
       fileClose();
       return;
@@ -590,22 +722,6 @@ CompileMustache::CompileMustache(char* _buffer,
     list_element[i] = -1;
     list_size[i] = -1;
   }
-  
-  // Gets set false if buffer over-runs.
-  success = true;
-}
-
-bool CompileMustache::myMemmove(char* destination, char* source, int len){
-  if(!success){
-    return false;
-  }
-  if(destination + len > buffer + buffer_size){
-    Serial.println("Error: Exceeded buffer size.");
-    len = buffer + buffer_size - destination;
-    return false;
-  }
-  memmove(destination, source, len);
-  return true;
 }
 
 void CompileMustache::parseBuffer(char* buffer_in, int buffer_in_len,
@@ -877,11 +993,6 @@ void CompileMustache::replaceTag(char* destination,
                                   const int len,
                                   const int list_depth)
 {
-  /*Serial.print("t  |");
-  Serial.print(tag);
-  Serial.print("  ");
-  Serial.println(type);*/
-
   memset(destination, '\0', len);
   element_count = 0;
 
@@ -1110,14 +1221,21 @@ void CompileMustache::replaceTag(char* destination,
     if(list_size[list_depth] < MAX_DEVICES){
       list_size[list_depth]++;
     }
+    Serial.print("io.entry ");
+    Serial.print(list_size[list_depth]);
+    Serial.print(" ");
+    Serial.println(MAX_DEVICES);
 
     if(type == tagListItem){
       list_element[list_depth]++;
       element_count = list_size[list_depth];
+      Serial.print(" tagListItem ");
+      Serial.println(list_element[list_depth]);
     } else {
       list_element[list_depth] = -1;
       String(list_size[list_depth]).toCharArray(destination, len);
       element_count = list_size[list_depth];
+      Serial.println(" else");
     }
   } else if(strcmp(tag, "iopin") == 0){
     list_size[list_depth] = 11;  // 11 IO pins available on the esp8266.
@@ -1414,3 +1532,32 @@ char* CompileMustache::findPattern(char* buff, const char* pattern, int line_len
   }
   return NULL;
 }
+
+
+bool sanitizeFilename(const String& buffer){
+  bool valid = true;
+  for(unsigned int i=0; i < buffer.length();i++){
+    if(buffer[i] >= 'A' && buffer[i] <= 'Z'){
+      // pass
+    } else if(buffer[i] >= 'a' && buffer[i] <= 'z'){
+      // pass
+    } else if(buffer[i] >= '0' && buffer[i] <= '9'){
+      // pass
+    } else if(buffer[i] == '.' && i > 0){
+      // Don't allow '.' as the first character in a file.
+      // pass
+    } else if(buffer[i] == '_'){
+      // pass
+    } else if(buffer[i] == '-'){
+      // pass
+    } else {
+      Serial.print("Invalid char in filename: ");
+      Serial.print(buffer);
+      Serial.print("  at pos ");
+      Serial.println(i);
+      valid = false;
+    }
+  }
+  return valid;
+}
+

@@ -41,25 +41,25 @@
 
 
 Config config = {
-  "",
-  {0,0,0,0},  // Null IP address means use DHCP.
-  {255,255,255,0},
-  {0,0,0,0},
-  {0,0,0,0},
-  1883,
-  "homeautomation/+",
-  "homeautomation/0",
-  {},
-  "192.168.192.54",
-  "/",
-  8000,
-  "",
-  0,
-  "",
-  "",
-  0,                    // session_token
-  0,                    // session_time
-  false                 // session_override
+  "",                 // Hostname
+  {0,0,0,0},          // IP address. Null IP address means use DHCP.
+  {0,0,0,0},          // Gateway.
+  {255,255,255,0},    // Subnet mask
+  {0,0,0,0},          // Broker hint.
+  1883,               // Broker port
+  "homeautomation/+", // subscribeprefix
+  "homeautomation/0", // publishprefix
+  {},                 // IO config.
+  "192.168.192.54",   // firmware host
+  "/",                // firmware directory
+  8000,               // firmware server port
+  "",                 // Enable password
+  0,                  // Enable IO pin
+  "",                 // WiFi SSID
+  "",                 // WiFi password
+  0,                  // session_token
+  0,                  // session_time
+  false               // session_override
 };
 
 
@@ -82,14 +82,14 @@ void mqttCallback(const char* topic, const byte* payload, const unsigned int len
 }
 
 // IO
-//Io io(&mqtt);
 Io io;
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
                        &my_mdns, &mqtt, &io);
 
-WebSocketsServer webSocket = WebSocketsServer(81);
+//WebSocketsServer webSocket = WebSocketsServer(81);
+WebSocket webSocket(&io, &config);
 
 
 void setPullFirmware(bool pull){
@@ -138,9 +138,6 @@ bool testPullFirmware(){
 // If we boot with the config.pull_firmware bit set in flash we should pull new firmware
 // from an HTTP server.
 bool pullFirmware(){
-  //config.pull_firmware = false;
-  //Persist_Data::Persistent<Config> persist_config(&config);
-  //persist_config.writeConfig();
   setPullFirmware(false);
 
   for(int tries = 0; tries < UPLOAD_FIRMWARE_RETRIES; tries++){
@@ -214,7 +211,7 @@ void setup_network(void) {
     brokers.RegisterMDns(&my_mdns);
 
     webSocket.begin();
-    webSocket.onEvent(webSocketEvent);
+    //webSocket.onEvent(webSocketEvent);
   }
 }
 
@@ -278,7 +275,7 @@ void loop(void) {
     String topic;
     String payload;
     while(io.getOutput(topic, payload)){
-      wsPublish(topic, payload);
+      webSocket.publish(topic, payload);
       mqtt.publish(topic, payload);
     }
   }

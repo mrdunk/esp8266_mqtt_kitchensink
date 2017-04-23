@@ -3,17 +3,25 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <head>
     <link rel="stylesheet" href="style.css">
-    <script src=""></script>
   </head>
-  <body>
+  <script id="template" type="text/x-mustache-template">
     <dl>
       <dt>MAC address</dt><dd>{{host.mac}}</dd>
       <dt>Hostname</dt><dd>{{config.hostname}}</dd>
       <dt>Active IP address</dt><dd>{{host.ip}}</dd>
       <dt>Configured IP address</dt><dd>{{config.ip}}</dd>
-      
       <dt>&nbsp</dt><dd>&nbsp</dd>
       
+      <dt>session.browser_auth_token</dt>
+      <dd>{{session.browser_auth_token}}</dd>
+      <dt>session.override_auth</dt>
+      <dd>{{session.override_auth}}</dd>
+      <dt>session.valid_until</dt>
+      <dd>{{session.valid_until}}&nbsp&nbsp(now: {{host.uptime}})</dd>
+      <dt>session.valid</dt>
+      <dd>{{session.valid}}</dd>
+			<dt>&nbsp</dt><dd>&nbsp</dd>
+
       <dt>WiFI RSSI</dt><dd>{{host.rssi}}</dd>
 
       {{#host.ssids}}
@@ -81,5 +89,12 @@
       <dt>&nbsp</dt><dd>&nbsp</dd>
       <dt>Configure</dt><dd><a href="configure">go</a></dd>
     </dl>
+  </script>
+  <body>
+    <div>WS idle for <span class="ws_health"></span> seconds</div>
+    <div>WS connection state: <span class="ws_state"></span></div>
+    <div id="log"></div>
   </body>
+  <script src="websockets.js"></script>
+  <script src="jsonForMustache.js"></script>
 </html>

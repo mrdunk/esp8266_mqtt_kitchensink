@@ -88,7 +88,6 @@ void SetHostname(const char* new_hostname);
 // The URL to an HTTP server where firmware can be pulled from.
 void SetFirmwareServer(const char* new_fws, char* dest_buffer);
 
-//bool pullFile(const String& filename);
 bool enterList(String& input, bool& inside_list, int& list_index,
                int& current_level);
 bool enterSubSet(String& input, int& level);
