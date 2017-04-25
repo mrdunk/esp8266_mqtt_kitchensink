@@ -251,7 +251,7 @@ function wsSend(){
     wsMessages.push(popped);
   }
 
-  wsMessagesTimer = setTimeout(wsSend, 1000);
+  wsMessagesTimer = setTimeout(wsSend, 1);
 }
 
 

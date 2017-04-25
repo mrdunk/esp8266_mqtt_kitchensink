@@ -23,6 +23,8 @@
 #include "message_parsing.h"
 #include "ipv4_helpers.h"
 
+extern TagRoot root_tag;
+
 void parse_topic(char* subscribeprefix,
                  char* topic,
                  Address_Segment* address_segments){
@@ -94,35 +96,30 @@ void parse_topic(char* subscribeprefix,
 }
 
 bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2){
-  for(int s=0; s < ADDRESS_SEGMENTS; s++){
+  /*for(int s=0; s < ADDRESS_SEGMENTS; s++){
     if(strlen(address_1[s].segment) == 0 && strlen(address_2[s].segment) == 0){
       break;
     }
     Serial.print(address_1[s].segment);
     Serial.print("\t\t");
     Serial.println(address_2[s].segment);
-  }
+  }*/
 
   if(strlen(address_2[0].segment) <= 0){
-    Serial.println("nope");
     return false;
   }
   if(strcmp(address_1[0].segment, "_all") != 0 &&
       strcmp(address_1[0].segment, address_2[0].segment) != 0){
-    Serial.println("nope");
     return false;
   }
   for(int s=1; s < ADDRESS_SEGMENTS; s++){
     if(strcmp(address_1[s].segment, "_all") == 0){
-      Serial.println("match");
       return true;
     }
     if(strcmp(address_1[s].segment, address_2[s].segment) != 0){
-      Serial.println("nope");
       return false;
     }
   }
-  Serial.println("match");
   return true;
 }
   
@@ -191,13 +188,16 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       return_pointer++;
     } else if(command == "learn"){
       Serial.println(payload);
+      String name_list[6];
+      name_list[0] = "host";
+      root_tag.getChild(name_list);
     }
   }
 
   for (int i = 0; i < MAX_DEVICES; ++i) {
 		if(compare_addresses(address_segments, config->devices[i].address_segment)){
-      Serial.print("Matches: ");
-			Serial.println(i);
+      //Serial.print("Matches: ");
+			//Serial.println(i);
 
 			if(command != "solicit"){
 				io->changeState(config->devices[i], command);

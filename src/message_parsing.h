@@ -28,6 +28,8 @@
 #include "config.h"
 #include "host_attributes.h"
 #include "devices.h"
+#include "mdns_actions.h"
+#include "tags.h"
 
 // Convert full topic into tokens, separated by "/".
 void parse_topic(const char* subscribeprefix,

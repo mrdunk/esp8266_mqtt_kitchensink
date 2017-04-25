@@ -37,7 +37,7 @@
 #include "src/http_server.h"
 #include "src/serve_files.h"
 #include "src/websocket.h"
-
+#include "src/tags.h"
 
 
 Config config = {
@@ -84,11 +84,16 @@ void mqttCallback(const char* topic, const byte* payload, const unsigned int len
 // IO
 Io io;
 
+// TagRoot's children can service requests for system data. Used in response
+// to network requests for specific data.
+String session_token;
+TagRoot root_tag(&config, &brokers, &my_mdns, &mqtt, &io, session_token);
+
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
                        &my_mdns, &mqtt, &io);
 
-//WebSocketsServer webSocket = WebSocketsServer(81);
+// WebSocket
 WebSocket webSocket(&io, &config);
 
 
