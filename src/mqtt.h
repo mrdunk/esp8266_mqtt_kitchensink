@@ -24,8 +24,8 @@
 
 
 #include <ESP8266WiFi.h>
-#include <PubSubClient.h>      // Include "PubSubClient" library.
-
+//#include <PubSubClient.h>      // Include "PubSubClient" library.
+#include "/home/duncan/Working/pubsubclient/src/PubSubClient.h"
 
 #include "config.h"
 #include "mdns_actions.h"
@@ -39,7 +39,10 @@ class Mqtt{
       mqtt_subscription_count(0),
       mqtt_subscribed_count(0),
       was_connected(false),
-      count_loop(0) {};
+      count_loop(0) 
+  {
+    mqtt_client.setBufferSize(255);
+  };
 
   // Called whenever a MQTT topic we are subscribed to arrives.
   void callback(const char* topic, const byte* payload, const unsigned int length);

@@ -7,17 +7,17 @@
   <script id="template" type="text/x-mustache-template">
     <dl>
       <dt>MAC address</dt><dd>{{host.mac}}</dd>
-      <dt>Hostname</dt><dd>{{config.hostname}}</dd>
-      <dt>Active IP address</dt><dd>{{host.ip}}</dd>
-      <dt>Configured IP address</dt><dd>{{config.ip}}</dd>
+      <dt>Hostname</dt><dd>{{host.hostname}}</dd>
+      <dt>Active IP address</dt><dd>{{host.nw.address}}</dd>
+      <dt>Configured IP address</dt><dd>{{host.nwconfigured.address}}</dd>
       <dt>&nbsp</dt><dd>&nbsp</dd>
       
-      <dt>session.browser_auth_token</dt>
-      <dd>{{session.browser_auth_token}}</dd>
-      <dt>session.override_auth</dt>
-      <dd>{{session.override_auth}}</dd>
-      <dt>session.valid_until</dt>
-      <dd>{{session.valid_until}}&nbsp&nbsp(now: {{host.uptime}})</dd>
+      <dt>session.providedtoken</dt>
+      <dd>{{session.providedtoken}}</dd>
+      <dt>session.overrideauth</dt>
+      <dd>{{session.overrideauth}}</dd>
+      <dt>session.validuntil</dt>
+      <dd>{{session.validuntil}}&nbsp&nbsp(now: {{host.uptime}})</dd>
       <dt>session.valid</dt>
       <dd>{{session.valid}}</dd>
 			<dt>&nbsp</dt><dd>&nbsp</dd>

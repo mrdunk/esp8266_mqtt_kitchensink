@@ -4,7 +4,7 @@ var ws_data_timer;
 var ws_start_timer;
 var MAX_TIME = 10 * 1000;
 var counter = 0;
-var wsMessages = [];
+var wsMessages = {};
 var wsMessagesTimer;
 
 function wsCodes(value){
@@ -39,7 +39,7 @@ function setIo(){
   var payload = {_command: !Boolean(parseInt(this.value)),
                  _subject: this.topic};
   console.log(payload);
-  wsQueueSend(JSON.stringify(payload));
+  wsQueueSend(payload);
 }
 
 function updatePage(payload){
@@ -153,7 +153,8 @@ function wsStart(){
     }
     var publishprefix = "homeautomation/0/";
     var solicit_topic = publishprefix + "_all/_all";
-    var message = "{\"_command\":\"solicit\", \"_subject\" : \"" + solicit_topic + "\"}";
+    var message = {_command: "solicit",
+                   _subject : solicit_topic};
     wsQueueSend(message);
 	};
 
@@ -163,6 +164,9 @@ function wsStart(){
     var payload = parsePayload(evt.data, log);
     if(payload !== undefined){
       updatePage(payload);
+      if(payload._command === "teach"){
+        wsDeQueue(payload);
+      }
     }
   };
 
@@ -217,10 +221,14 @@ function wsInit() {
 };
 
 function wsQueueSend(message){
-  console.log("wsQueueSend(", message, ")", wsMessages.length, wsMessagesTimer);
+  console.log("wsQueueSend(", message, ")", message.name, wsMessagesTimer);
 
   if(message !== undefined){
-    wsMessages.push(message);
+    if(message.name === undefined){
+      wsMessages[JSON.stringify(message)] = message;
+    } else {
+      wsMessages[message.name] = message;
+    }
   }
   if(wsMessagesTimer === undefined){
     wsSend();
@@ -228,30 +236,48 @@ function wsQueueSend(message){
 }
 
 function wsSend(){
-  console.log("wsSend()", wsMessages.length, websocket.readyState, wsMessagesTimer);
-  if(wsMessages.length === 0){
+  console.log("wsSend()", Object.getOwnPropertyNames(wsMessages).length,
+              websocket.readyState, wsMessagesTimer);
+  if(Object.getOwnPropertyNames(wsMessages).length === 0){
+    clearTimeout(wsMessagesTimer);
     wsMessagesTimer = undefined;
-   return;
+    return;
   }
   if(websocket.readyState !== WebSocket.OPEN){
+    clearTimeout(wsMessagesTimer);
     wsMessagesTimer = setTimeout(wsSend, 1000);
     return;
   }
-  console.log("wsSend()");
 
   var popped;
   try{
-    popped = wsMessages.pop();
-    websocket.send(popped);
+    var name = Object.getOwnPropertyNames(wsMessages)[0];
+    popped = wsMessages[name];
+    websocket.send(JSON.stringify(popped));
     if(log){
-      log.innerHTML += "<p style='color: green;'>> WS publish: " + popped + "</p>";
+      log.innerHTML += "<p style='color: green;'>> WS publish: " +
+                       JSON.stringify(popped) + "</p>";
+    }
+    if(popped._command !== "learn"){
+      wsDeQueue(popped);
     }
   }catch(err){
     console.log(err);
-    wsMessages.push(popped);
   }
 
-  wsMessagesTimer = setTimeout(wsSend, 1);
+  clearTimeout(wsMessagesTimer);
+  wsMessagesTimer = setTimeout(wsSend, 1000);
+}
+
+function wsDeQueue(message){
+  var name;
+  if(message.name === undefined){
+    name = JSON.stringify(message);
+  } else {
+    name = message.name;
+  }
+  delete wsMessages[name];
+  wsSend();
 }
 
 

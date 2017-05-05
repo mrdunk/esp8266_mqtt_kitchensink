@@ -32,9 +32,11 @@
 #include "tags.h"
 
 // Convert full topic into tokens, separated by "/".
-void parse_topic(const char* subscribeprefix,
-                 const char* topic,
-                 Address_Segment* address_segments);
+//void parse_topic(const char* subscribeprefix,
+//                 const char* topic,
+//                 Address_Segment* address_segments);
+
+//void parse_tag_name(const char* tag_name, String* name_list);
 
 bool compare_addresses(const Address_Segment* address_1, const Address_Segment* address_2);
 

@@ -25,6 +25,22 @@
 
 extern TagRoot root_tag;
 
+void parse_tag_name(String& tag_name, String* name_list){
+  uint8_t section_count = 0;
+  uint8_t section_start = 0;
+  while(section_start < tag_name.length() && section_count < MAX_TAG_RECURSION){
+    int section_end = tag_name.indexOf(".", section_start);
+    if(section_end < 0){
+      section_end = tag_name.length();
+    }
+    name_list[section_count++] = tag_name.substring(section_start, section_end);
+    section_start = section_end +1;
+  }
+  for(uint8_t i = section_count; i < MAX_TAG_RECURSION; i++){
+    name_list[i] = "";
+  }
+}
+
 void parse_topic(char* subscribeprefix,
                  char* topic,
                  Address_Segment* address_segments){
@@ -188,9 +204,56 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       return_pointer++;
     } else if(command == "learn"){
       Serial.println(payload);
-      String name_list[6];
-      name_list[0] = "host";
-      root_tag.getChild(name_list);
+      String name_list[MAX_TAG_RECURSION];
+      //name_list[0] = "host";
+      //name_list[1] = "nw";
+      //name_list[2] = "gateway";
+      //name_list[3] = "session";
+      String tag_name = valueFromStringPayload(payload, "name");
+      parse_tag_name(tag_name, name_list);
+
+      TagBase* final = root_tag.getChild(name_list); 
+      Serial.print("Final: ");
+      if(final){
+        TagBase* p = final;
+        while(p){
+          Serial.print(p->name);
+          Serial.print(" ");
+          p = p->getParent();
+        }
+        Serial.println();
+
+        return_topics[return_pointer] = "";
+
+        StaticJsonBuffer<300> jsonBuffer;
+        JsonObject& root = jsonBuffer.createObject();
+        root["name"] = tag_name;
+        root["_command"] = "teach";
+        JsonArray& contents = root.createNestedArray("contents");
+        JsonArray& values = root.createNestedArray("values");
+        for(int i = 0; i < 100; i++){
+          String content;
+          int value;
+          if(!final->contentsAt(i, content, value)){
+            contents.add(content);
+            values.add(value);
+            break;
+          }
+          contents.add(content);
+          values.add(value);
+        }
+        //root[""] = ;
+        //root[""] = ;
+        char buffer[300];
+        root.printTo(buffer, sizeof(buffer));
+        return_payloads[return_pointer] = buffer;
+
+        return_pointer++;
+      } else {
+        Serial.println("NULL");
+        return_payloads[return_pointer] =
+          "{\"state\":\"missing\", \"name\":\"" + tag_name + "\",\"_command\":\"teach\"}";
+      }
     }
   }
 
@@ -202,10 +265,11 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
 			if(command != "solicit"){
 				io->changeState(config->devices[i], command);
       }
-      io->toAnnounce(config->devices[i],
-                     return_topics[return_pointer],
-                     return_payloads[return_pointer]);
-      return_pointer++;
+      if(return_pointer < MAX_DEVICES +1){
+        io->toAnnounce(config->devices[i], return_topics[return_pointer],
+            return_payloads[return_pointer]);
+        return_pointer++;
+      }
 		}
   }
 }
@@ -224,9 +288,9 @@ void toAnnounceHost(Config* config, String& topic, String& payload){
   payload += ip_to_string(WiFi.localIP());
   payload += "\"";
 
-  //payload += ", \"_subject\":\"hosts/";
-  //payload += config->hostname;
-  //payload += "\"";
+  payload += ", \"_subject\":\"hosts/";
+  payload += config->hostname;
+  payload += "\"";
 
   payload += "}";
 

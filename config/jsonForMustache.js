@@ -75,22 +75,29 @@ var Parser =
     }
   },
 
-  requestData : function(tag){
+  requestData : function(tag, parent_name=""){
+    if(parent_name === "root"){
+      parent_name = "";
+    } else {
+      parent_name += ".";
+    }
     for(var i=0; i < tag.children.length; i++){
       var child = tag.children[i];
-      var summary = {name: child.name,
+      var summary = {name: parent_name + child.name,
                      type: child.type,
                      _subject: "hosts/_all",
                      _command: "learn"};
-      wsQueueSend(JSON.stringify(summary));
-      this.requestData(child);
+      if(summary.type === "name"){
+        wsQueueSend(summary);
+      }
+      this.requestData(child, summary.name);
     }
   }
 }
 
 window.addEventListener("load", function(){
-    Parser.init();
-    Parser.parse(document.getElementById("template").innerHTML);
-    console.log(Parser.tag_root);
-    Parser.requestData(Parser.tag_root);
-    }, false);
+  Parser.init();
+  Parser.parse(document.getElementById("template").innerHTML);
+  console.log(Parser.tag_root);
+  Parser.requestData(Parser.tag_root, "root");
+}, false);
