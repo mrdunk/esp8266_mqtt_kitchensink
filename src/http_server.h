@@ -71,6 +71,7 @@ class HttpServer{
   void loop();
  private:
   MyESP8266WebServer esp8266_http_server;
+  void fetchCookie();
   void onTest();
   void pullFiles();
   void handleLogin();
@@ -112,7 +113,7 @@ class CompileMustache{
                   mdns::MDns* _mdns,
                   Mqtt* _mqtt,
                   Io* _io,
-                  const String& _session_token);
+                  const uint32_t _session_token);
 
   void parseBuffer(char* buffer_in, int buffer_in_len,
                    char*& buffer_out, int& buffer_out_len,
@@ -161,7 +162,7 @@ class CompileMustache{
   Mqtt* mqtt;
   Io* io;
   char list_parent[128];
-  const String& session_token; 
+  const uint32_t session_token; 
   int head;
   int tail;
   int list_element[MAX_LIST_RECURSION];  

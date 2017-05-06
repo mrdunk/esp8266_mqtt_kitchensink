@@ -24,7 +24,6 @@
 #include "FS.h"
 
 #include "http_server.h"
-//#include "html_primatives.h"
 #include "ipv4_helpers.h"
 #include "config.h"
 #include "serve_files.h"
@@ -82,8 +81,26 @@ HttpServer::HttpServer(char* _buffer,
   bufferClear();
 }
 
+void HttpServer::fetchCookie(){
+  config->session_token_provided = 0;
+  if (esp8266_http_server.hasHeader("Cookie")){
+    //config->session_token_provided = esp8266_http_server.header("Cookie");
+    Serial.println(esp8266_http_server.header("Cookie"));
+    if(esp8266_http_server.header("Cookie").startsWith("ESPSESSIONID=")){
+      Serial.println("*");
+      String cookie =
+        esp8266_http_server.header("Cookie").substring(strlen("ESPSESSIONID="));
+      config->session_token_provided = strtoul(cookie.c_str(), NULL, 10);
+      Serial.println(esp8266_http_server.header("Cookie").substring(strlen("ESPSESSIONID=")));
+      Serial.println(cookie);
+      Serial.println(config->session_token_provided);
+    }
+  }
+}
+
 void HttpServer::pullFiles(){
   bufferClear();
+  fetchCookie();
 
   bool header_received = false;
   int status_code = 0;
@@ -120,7 +137,6 @@ void HttpServer::pullFiles(){
     esp8266_http_server.send(200, "text/html", "");
   }
 
-  String session_token = esp8266_http_server.header("Cookie");
 
   // Fetch Web page from external file server so we can re-write it with our
   // pull requests.
@@ -195,11 +211,11 @@ void HttpServer::pullFiles(){
 //Check if header is present and correct
 bool HttpServer::isAuthentified(bool redirect){
   Serial.println("isAuthentified()");
-  if (esp8266_http_server.hasHeader("Cookie")){
-    if(config->sessionValid(esp8266_http_server.header("Cookie"))){
-      Serial.println("Authentication Successful");
-      return true;
-    }
+  fetchCookie();
+
+  if (config->session_token == config->session_token_provided){
+    Serial.println("Authentication Successful");
+    return true;
   }
   Serial.println("Authentication Failed");
   if(redirect){
@@ -231,6 +247,7 @@ void HttpServer::handleLogin(){
     esp8266_http_server.sendHeader("Location", action);
     esp8266_http_server.sendHeader("Cache-Control","no-cache");
     esp8266_http_server.sendHeader("Set-Cookie","ESPSESSIONID=0");
+    config->session_token_provided = 0;
     esp8266_http_server.send(301);
     return;
   }
@@ -240,9 +257,10 @@ void HttpServer::handleLogin(){
     esp8266_http_server.sendHeader("Location", action);
     esp8266_http_server.sendHeader("Cache-Control","no-cache");
     esp8266_http_server.sendHeader("Set-Cookie","ESPSESSIONID=0");
-    esp8266_http_server.send(301);
+    config->session_token_provided = 0;
     config->session_token = 0;
     config->session_override = false;
+    esp8266_http_server.send(301);
     return;
   }
   if (esp8266_http_server.hasArg("USERNAME") && esp8266_http_server.hasArg("PASSWORD")){
@@ -258,6 +276,7 @@ void HttpServer::handleLogin(){
       esp8266_http_server.sendHeader("Cache-Control","no-cache");
       String cookie_header("ESPSESSIONID=");
       cookie_header += config->session_token;
+      config->session_token_provided = config->session_token;
       esp8266_http_server.sendHeader("Set-Cookie", cookie_header);
       esp8266_http_server.send(301);
       Serial.println("Log in Successful");
@@ -295,6 +314,7 @@ void HttpServer::handleNotFound(){
 
 void HttpServer::onFileOperations(const String& _filename){
   bufferClear();
+  fetchCookie();
 
   String filename = "";
   if(_filename.length()){
@@ -427,9 +447,8 @@ void HttpServer::onFileOperations(const String& _filename){
         esp8266_http_server.send(200, mime(filename), "");
       }
 
-      String session_token = esp8266_http_server.header("Cookie");
       CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns,
-          mqtt, io, session_token);
+          mqtt, io, config->session_token_provided);
 
       int list_depth = 0;
       bool parsing_list = false;
@@ -549,7 +568,7 @@ void HttpServer::onSet(){
   bool sucess = true;
   bufferClear();
   
-  if(!config->sessionValid(esp8266_http_server.header("Cookie"))){
+  if(!config->sessionValid()){
     Serial.println("Not allowed to onSet()");
     esp8266_http_server.send(401, "text/html", "Not allowed to onSet()");
     return;
@@ -707,7 +726,7 @@ CompileMustache::CompileMustache(char* _buffer,
                                  mdns::MDns* _mdns,
                                  Mqtt* _mqtt,
                                  Io* _io,
-                                 const String& _session_token) :
+                                 const uint32_t _session_token) :
   buffer(_buffer),  
   buffer_size(_buffer_size),
   config(_config),
@@ -997,7 +1016,7 @@ void CompileMustache::replaceTag(char* destination,
   element_count = 0;
 
   if(strcmp(tag, "session.browser_auth_token") == 0){
-    session_token.toCharArray(destination, len);
+    //session_token.toCharArray(destination, len);
     element_count = 1;
   } else if(strcmp(tag, "session.current_auth_token") == 0){
     String current_session_token("ESPSESSIONID=");
@@ -1013,13 +1032,13 @@ void CompileMustache::replaceTag(char* destination,
   } else if(strcmp(tag, "session.valid") == 0){
     const unsigned int now = millis() / 1000;
     const int remaining = config->session_time + SESSION_TIMEOUT - now;
-    if(config->sessionValid(session_token) && remaining > 0){
+    /*if(config->sessionValid(session_token) && remaining > 0){
       String(config->session_time + SESSION_TIMEOUT - now).toCharArray(destination, len);
       element_count = 1;
     } else {
       String("expired").toCharArray(destination, len);
       element_count = 0;
-    }
+    }*/
   } else if(strcmp(tag, "session.login_form") == 0){
 
   } else if(strcmp(tag, "host.mac") == 0){

@@ -3,6 +3,7 @@ var websocket = null;
 var ws_data_timer;
 var ws_start_timer;
 var MAX_TIME = 10 * 1000;
+var KEEPALIVE_TIME = 2000;
 var counter = 0;
 var wsMessages = {};
 var wsMessagesTimer;
@@ -187,7 +188,8 @@ function wsStart(){
 
 function wsCheck(){
   //console.log(!websocket || websocket.readyState);
-  if(websocket && websocket.readyState === WebSocket.OPEN){
+  if(websocket && websocket.readyState === WebSocket.OPEN &&
+      Date.now() - ws_data_timer >= KEEPALIVE_TIME){
     counter += 1;
     websocket.send("{\"_ping\":\"" + counter + "\"}");
   }
@@ -217,7 +219,7 @@ function wsInit() {
   }
   ws_data_timer = Date.now();
   wsStart();
-  window.setInterval(wsCheck, 2000);
+  window.setInterval(wsCheck, KEEPALIVE_TIME);
 };
 
 function wsQueueSend(message){
@@ -246,6 +248,7 @@ function wsSend(){
   if(websocket.readyState !== WebSocket.OPEN){
     clearTimeout(wsMessagesTimer);
     wsMessagesTimer = setTimeout(wsSend, 1000);
+    wsCheck();
     return;
   }
 
@@ -276,8 +279,10 @@ function wsDeQueue(message){
   } else {
     name = message.name;
   }
-  delete wsMessages[name];
-  wsSend();
+  if(wsMessages[name] !== undefined){
+    delete wsMessages[name];
+    wsSend();
+  }
 }
 
 

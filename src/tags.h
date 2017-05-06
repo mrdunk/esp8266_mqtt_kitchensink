@@ -34,11 +34,11 @@
 #define MAX_TAG_RECURSION 6
 
 
-#define COMMON_DEF Config* _config, MdnsLookup* _brokers, mdns::MDns* _mdns, Mqtt* _mqtt, Io* _io, const String& _session_token
+#define COMMON_DEF Config* _config, MdnsLookup* _brokers, mdns::MDns* _mdns, Mqtt* _mqtt, Io* _io
 
-#define COMMON_PERAMS _config, _brokers, _mdns, _mqtt, _io, _session_token
+#define COMMON_PERAMS _config, _brokers, _mdns, _mqtt, _io
 
-#define COMMON_ALLOCATE config(_config), brokers(_brokers), mdns(_mdns), mqtt(_mqtt), io(_io), session_token(_session_token), base_children(_base_children), parent(NULL), children_len(_children_len)
+#define COMMON_ALLOCATE config(_config), brokers(_brokers), mdns(_mdns), mqtt(_mqtt), io(_io), base_children(_base_children), parent(NULL), children_len(_children_len)
 
 #define CHILDREN_LEN (sizeof(children)/sizeof(children[0]))
 
@@ -53,7 +53,7 @@ class TagBase{
     return false;
   }
 
-  unsigned int contentCount(){
+  virtual unsigned int contentCount(){
     return 0;
   }
 
@@ -120,7 +120,6 @@ class TagBase{
   mdns::MDns* mdns;
   Mqtt* mqtt;
   Io* io;
-  const String& session_token;
   TagBase** base_children;
   TagBase* parent;
   const uint8_t children_len;
@@ -137,7 +136,7 @@ class TagSessionValid : public TagBase{
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     const unsigned int now = millis() / 1000;
     const int remaining = config->session_time + SESSION_TIMEOUT - now;
-    if(config->sessionValid(session_token) && remaining > 0){
+    if(config->sessionValid() && remaining > 0){
       content = "valid for ";
       content += remaining;
       value = remaining;
@@ -154,6 +153,12 @@ class TagSessionValiduntil : public TagBase{
   TagSessionValiduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "validuntil"),
                                      children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->session_time + SESSION_TIMEOUT;
+    content = "";
+    return false;
+  }
 };
 
 class TagSessionProvidedtoken : public TagBase{
@@ -161,6 +166,12 @@ class TagSessionProvidedtoken : public TagBase{
   TagSessionProvidedtoken(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "providedtoken"),
                                         children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->session_token_provided;
+    content = config->session_token_provided;
+    return false;
+  }
 };
 
 class TagSessionExpectedtoken : public TagBase{
@@ -168,6 +179,25 @@ class TagSessionExpectedtoken : public TagBase{
   TagSessionExpectedtoken(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "expectedtoken"),
                                         children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->session_token;
+    content = config->session_token;
+    return false;
+  }
+};
+
+class TagSessionOverrideauth : public TagBase{
+ public:
+  TagSessionOverrideauth(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "overrideauth"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->session_override;
+    content = config->session_override;
+    return false;
+  }
 };
 
 class TagSession : public TagBase{
@@ -176,8 +206,9 @@ class TagSession : public TagBase{
                            children{new TagSessionValid(COMMON_PERAMS),
                                     new TagSessionValiduntil(COMMON_PERAMS),
                                     new TagSessionProvidedtoken(COMMON_PERAMS),
-                                    new TagSessionExpectedtoken(COMMON_PERAMS)} { }
-  TagBase* children[4];
+                                    new TagSessionExpectedtoken(COMMON_PERAMS),
+                                    new TagSessionOverrideauth(COMMON_PERAMS)} { }
+  TagBase* children[5];
 };
 
 class TagHostHostname : public TagBase{
@@ -185,6 +216,12 @@ class TagHostHostname : public TagBase{
   TagHostHostname(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "hostname"),
                                 children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = config->hostname;
+    return false;
+  }
 };
 
 class TagHostMac : public TagBase{
@@ -192,6 +229,212 @@ class TagHostMac : public TagBase{
   TagHostMac(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mac"),
                            children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    content = macToStr(mac);
+    return false;
+  }
+};
+
+class TagHostUptime : public TagBase{
+ public:
+  TagHostUptime(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mac"),
+                           children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = millis() / 1000;
+    content = (millis() / 1000);
+    content += " seconds";
+    return false;
+  }
+};
+
+class TagHostRssi : public TagBase{
+ public:
+  TagHostRssi(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "rssi"),
+                           children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = WiFi.RSSI();
+    content = WiFi.RSSI();
+    content += "dBm";
+    return false;
+  }
+};
+
+class TagHostCoreCpuspeed : public TagBase{
+ public:
+  TagHostCoreCpuspeed(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "cpu_speed"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = ESP.getCpuFreqMHz();
+    content = ESP.getCpuFreqMHz();
+    content += "MHz";
+    return false;
+  }
+};
+
+class TagHostCoreFlashsize : public TagBase{
+ public:
+  TagHostCoreFlashsize(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "flash_size"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = ESP.getFlashChipSize();
+    content = (ESP.getFlashChipSize() / 1024);
+    content += "k";
+    return false;
+  }
+};
+
+class TagHostCoreFlashspeed : public TagBase{
+ public:
+  TagHostCoreFlashspeed(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "flash_speed"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getFlashChipSpeed();
+    return false;
+  }
+};
+
+class TagHostCoreFlashfree : public TagBase{
+ public:
+  TagHostCoreFlashfree(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "flash_free"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = ESP.getFreeSketchSpace();
+    content = (ESP.getFreeSketchSpace() / 1024);
+    content += "k";
+    return false;
+  }
+};
+
+class TagHostCoreFlashratio : public TagBase{
+ public:
+  TagHostCoreFlashratio(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "flash_ratio"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = "";
+    if(ESP.getFlashChipSize() > 0){
+      value = (100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()) -1;
+      content = (int(100 * ESP.getFreeSketchSpace() / ESP.getFlashChipSize()));
+      content += "%";
+    }
+    return false;
+  }
+};
+
+class TagHostCoreRamfree : public TagBase{
+ public:
+  TagHostCoreRamfree(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ram_free"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = ESP.getFreeHeap();
+    content = (ESP.getFreeHeap() / 1024);
+    content += "k";
+    return false;
+  }
+};
+
+class TagHostCoreSdkversion : public TagBase{
+ public:
+  TagHostCoreSdkversion(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "sdk_version"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getSdkVersion();
+    return false;
+  }
+};
+
+class TagHostCoreCoreversion : public TagBase{
+ public:
+  TagHostCoreCoreversion(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "core_version"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getCoreVersion();
+    return false;
+  }
+};
+
+class TagHostCoreResetreason : public TagBase{
+ public:
+  TagHostCoreResetreason(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "reset_reason"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getResetReason();
+    return false;
+  }
+};
+
+class TagHostCoreChipid : public TagBase{
+ public:
+  TagHostCoreChipid(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "chip_id"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getChipId();
+    return false;
+  }
+};
+
+class TagHostCoreCpucycles : public TagBase{
+ public:
+  TagHostCoreCpucycles(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "cpu_cycles"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ESP.getCycleCount();
+    return false;
+  }
+};
+
+class TagHostCore : public TagBase{
+ public:
+  TagHostCore(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "core"),
+                          children{new TagHostCoreCpuspeed(COMMON_PERAMS),
+                                   new TagHostCoreFlashsize(COMMON_PERAMS),
+                                   new TagHostCoreFlashfree(COMMON_PERAMS),
+                                   new TagHostCoreFlashratio(COMMON_PERAMS),
+                                   new TagHostCoreFlashspeed(COMMON_PERAMS),
+                                   new TagHostCoreRamfree(COMMON_PERAMS),
+                                   new TagHostCoreSdkversion(COMMON_PERAMS),
+                                   new TagHostCoreCoreversion(COMMON_PERAMS),
+                                   new TagHostCoreResetreason(COMMON_PERAMS),
+                                   new TagHostCoreChipid(COMMON_PERAMS),
+                                   new TagHostCoreCpucycles(COMMON_PERAMS)
+                          } { }
+  TagBase* children[11];
 };
 
 class TagHostNwAddress : public TagBase{
@@ -199,6 +442,12 @@ class TagHostNwAddress : public TagBase{
   TagHostNwAddress(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
                                  children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(WiFi.localIP());
+    return false;
+  }
 };
 
 class TagHostNwGateway : public TagBase{
@@ -206,6 +455,12 @@ class TagHostNwGateway : public TagBase{
   TagHostNwGateway(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "gateway"),
                                  children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(WiFi.subnetMask());
+    return false;
+  }
 };
 
 class TagHostNwSubnet : public TagBase{
@@ -213,6 +468,12 @@ class TagHostNwSubnet : public TagBase{
   TagHostNwSubnet(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subnet"),
                                 children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(WiFi.gatewayIP());
+    return false;
+  }
 };
 
 class TagHostNw : public TagBase{
@@ -229,6 +490,12 @@ class TagHostNwconfiguredAddress : public TagBase{
   TagHostNwconfiguredAddress(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
                                            children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(config->ip);
+    return false;
+  }
 };
 
 class TagHostNwconfiguredGateway : public TagBase{
@@ -236,6 +503,12 @@ class TagHostNwconfiguredGateway : public TagBase{
   TagHostNwconfiguredGateway(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "gateway"),
                                            children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(config->gateway);
+    return false;
+  }
 };
 
 class TagHostNwconfiguredSubnet : public TagBase{
@@ -243,6 +516,12 @@ class TagHostNwconfiguredSubnet : public TagBase{
   TagHostNwconfiguredSubnet(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subnet"),
                                           children{} { }
   TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = ip_to_string(config->subnet);
+    return false;
+  }
 };
 
 class TagHostNwconfigured : public TagBase{
@@ -254,14 +533,71 @@ class TagHostNwconfigured : public TagBase{
   TagBase* children[3];
 };
 
+class TagHostSsidsName : public TagBase{
+ public:
+  TagHostSsidsName(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "name"),
+                                          children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    parent->contentCount();
+
+    value = parent->contentCount();//WiFi.RSSI(index);
+    content = WiFi.SSID(index);
+    return (index < parent->contentCount());
+  }
+};
+
+class TagHostSsidsSignal : public TagBase{
+ public:
+  TagHostSsidsSignal(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "signal"),
+                                          children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    parent->contentCount();
+
+    value = WiFi.RSSI(index);
+    content = WiFi.SSID(index);
+    //content = value;
+    //content += "dBm";
+    return (index < parent->contentCount());
+  }
+};
+
+class TagHostSsids : public TagBase{
+ public:
+  TagHostSsids(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ssids"),
+                                    children{new TagHostSsidsName(COMMON_PERAMS),
+                                             new TagHostSsidsSignal(COMMON_PERAMS)} { }
+  TagBase* children[2];
+  
+  unsigned int contentCount(){
+    static const uint8_t UPDATE_EVERY = 10;  // seconds.
+    uint32_t now = millis() / 1000;
+    static uint32_t last_updated = 0;
+    static int8_t wifi_count = -1;
+    if(last_updated + UPDATE_EVERY <= now || wifi_count < 0){
+      wifi_count = WiFi.scanNetworks();
+    }
+    last_updated = now;
+    return wifi_count;
+  }
+};
+
 class TagHost : public TagBase{
  public:
   TagHost(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host"),
                         children{new TagHostHostname(COMMON_PERAMS),
                                  new TagHostMac(COMMON_PERAMS),
+                                 new TagHostUptime(COMMON_PERAMS),
+                                 new TagHostRssi(COMMON_PERAMS),
+                                 new TagHostCore(COMMON_PERAMS),
                                  new TagHostNw(COMMON_PERAMS),
-                                 new TagHostNwconfigured(COMMON_PERAMS)} { }
-  TagBase* children[4];
+                                 new TagHostNwconfigured(COMMON_PERAMS),
+                                 new TagHostSsids(COMMON_PERAMS),
+                        } { }
+  TagBase* children[8];
 };
 
 class TagRoot : public TagBase{

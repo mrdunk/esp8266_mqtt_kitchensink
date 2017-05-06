@@ -58,6 +58,7 @@ Config config = {
   "",                 // WiFi SSID
   "",                 // WiFi password
   0,                  // session_token
+  0,                  // session_token_provided
   0,                  // session_time
   false               // session_override
 };
@@ -86,8 +87,7 @@ Io io;
 
 // TagRoot's children can service requests for system data. Used in response
 // to network requests for specific data.
-String session_token;
-TagRoot root_tag(&config, &brokers, &my_mdns, &mqtt, &io, session_token);
+TagRoot root_tag(&config, &brokers, &my_mdns, &mqtt, &io);
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,

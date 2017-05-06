@@ -43,10 +43,11 @@ struct Config {
   char wifi_ssid[STRING_LEN];
   char wifi_passwd[STRING_LEN];
   uint32_t session_token;
+  uint32_t session_token_provided;
   uint32_t session_time;
   bool session_override;
 
-  bool sessionValid(const String& session_key);
+  bool sessionValid();
   bool sessionExpired();
   bool setValue(const String& parent,
                 const String& key,

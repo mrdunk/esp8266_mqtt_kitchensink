@@ -134,7 +134,7 @@ bool Config::sessionExpired(){
   return false;
 }
 
-bool Config::sessionValid(const String& session_key){
+bool Config::sessionValid(){
   if(sessionExpired()){
     return false;
   }
@@ -142,14 +142,8 @@ bool Config::sessionValid(const String& session_key){
   //Serial.print("session_key is:       ");
   //Serial.println(session_key);
 
-  String cookie_header("ESPSESSIONID=");
-  cookie_header += session_token;
-
-  //Serial.print("Expected session_key: ");
-  //Serial.println(cookie_header);
-
-  if(session_key.indexOf(cookie_header) == 0 &&
-      session_key.indexOf("ESPSESSIONID=0") != 0)
+  if(session_token_provided == session_token &&
+      session_token_provided != 0)
   {
     //Serial.println("Authentication Successful");
     session_time = millis() / 1000;

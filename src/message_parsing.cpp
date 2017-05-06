@@ -223,36 +223,46 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
         }
         Serial.println();
 
-        return_topics[return_pointer] = "";
 
-        StaticJsonBuffer<300> jsonBuffer;
+        StaticJsonBuffer<500> jsonBuffer;
         JsonObject& root = jsonBuffer.createObject();
-        root["name"] = tag_name;
-        root["_command"] = "teach";
-        JsonArray& contents = root.createNestedArray("contents");
-        JsonArray& values = root.createNestedArray("values");
         for(int i = 0; i < 100; i++){
+          root["name"] = tag_name;
+          root["_command"] = "teach";
+
           String content;
           int value;
-          if(!final->contentsAt(i, content, value)){
-            contents.add(content);
-            values.add(value);
+          
+          bool more = final->contentsAt(i, content, value);
+          
+          if(content == ""){
+            content = "_";
+          }
+
+          root["content"] = content;
+          root["value"] = value;
+          root["sequence"] = i;
+
+        
+          //root[""] = ;
+          //root[""] = ;
+
+          return_topics[return_pointer] = "";
+          root.printTo(return_payloads[return_pointer]);
+
+          return_pointer++;
+          if(return_pointer >= MAX_DEVICES +1){
             break;
           }
-          contents.add(content);
-          values.add(value);
+          if(!more){
+            break;
+          }
         }
-        //root[""] = ;
-        //root[""] = ;
-        char buffer[300];
-        root.printTo(buffer, sizeof(buffer));
-        return_payloads[return_pointer] = buffer;
-
-        return_pointer++;
       } else {
         Serial.println("NULL");
         return_payloads[return_pointer] =
           "{\"state\":\"missing\", \"name\":\"" + tag_name + "\",\"_command\":\"teach\"}";
+          return_pointer++;
       }
     }
   }

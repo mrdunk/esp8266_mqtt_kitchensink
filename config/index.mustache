@@ -14,6 +14,8 @@
       
       <dt>session.providedtoken</dt>
       <dd>{{session.providedtoken}}</dd>
+      <dt>session.expectedtoken</dt>
+      <dd>{{session.expectedtoken}}</dd>
       <dt>session.overrideauth</dt>
       <dd>{{session.overrideauth}}</dd>
       <dt>session.validuntil</dt>
@@ -35,13 +37,14 @@
       <dt>&nbsp</dt><dd>&nbsp</dd>
 
       <dt>CPU frequency</dt><dd>{{host.cpu_freqency}}</dd>
-      <dt>Flash size</dt><dd>{{host.flash_size}}</dd>
+      <dt>Flash size</dt><dd>{{host.core.flash_size}}</dd>
       <dt>Flash space</dt>
-      <dd>{{host.flash_space}} / {{host.flash_size}}&nbsp;&nbsp;({{host.flash_ratio}}%)</dd>
-      <dt>Flash speed</dt><dd>{{host.flash_speed}}</dd>
-      <dt>Free memory</dt><dd>{{host.free_memory}}</dd>
-      <dt>SDK version</dt><dd>{{host.sdk_version}}</dd>
-      <dt>Core version</dt><dd>{{host.core_version}}</dd>
+      <dd>{{host.core.flash_free}} / {{host.core.flash_size}}&nbsp;&nbsp;
+          ({{host.core.flash_ratio}}%)</dd>
+      <dt>Flash speed</dt><dd>{{host.core.flash_speed}}</dd>
+      <dt>Free memory</dt><dd>{{host.core.ram_free}}</dd>
+      <dt>SDK version</dt><dd>{{host.core.sdk_version}}</dd>
+      <dt>Core version</dt><dd>{{host.core.core_version}}</dd>
 
       <dt>&nbsp</dt><dd>&nbsp</dd>
       
