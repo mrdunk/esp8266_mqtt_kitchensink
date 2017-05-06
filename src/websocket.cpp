@@ -39,21 +39,14 @@ WebSocket::WebSocket(Io* io_, Config* config_) :
 
 void WebSocket::parseIncoming(uint8_t num, uint8_t * payload, size_t length) {
   String topic = "";
-  String payload_string((char*)payload);
-  String return_topics[MAX_DEVICES +1];
-  String return_payloads[MAX_DEVICES +1];
 
   String sequence = value_from_payload(payload, length, "_ping");
   if(sequence != ""){
     websocket.sendTXT(num, ". : {\"_ack\":\"" + sequence + "\"}");
   } else {
-    actOnMessage(io, config, topic, payload_string, return_topics, return_payloads);
-    for(int i = 0; i < MAX_DEVICES +1; i++){
-      if(return_topics[i] != "" || return_payloads[i] != ""){
-        // send message to client
-        websocket.sendTXT(num, return_topics[i] + " : " + return_payloads[i]);
-      }
-    }
+    auto sendTXT_callback = 
+      [&](String& t, String& p) {websocket.sendTXT(num, t + " : " + p);};
+    actOnMessage(io, config, topic, (char*)payload, sendTXT_callback);
   }
 }
 

@@ -45,7 +45,8 @@ String valueFromStringPayload(const String& payload, const String& key);
 String value_from_payload(const byte* payload, const unsigned int length, const String key);
 
 void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
-                  String* return_topics, String* return_payloads);
+                  std::function< void(String&, String&) > callback);
+                  //String* return_topics, String* return_payloads);
 
 void toAnnounceHost(Config* config, String& topic, String& payload);
 

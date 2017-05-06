@@ -413,8 +413,22 @@ class TagHostCoreCpucycles : public TagBase{
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
-    value = 0;
-    content = ESP.getCycleCount();
+    value = ESP.getCycleCount();
+    content = value;
+    return false;
+  }
+};
+
+class TagHostCoreUptime : public TagBase{
+ public:
+  TagHostCoreUptime(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "uptime"),
+                                 children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = millis() / 1000;
+    content = value;
+    content += "seconds";
     return false;
   }
 };
@@ -432,9 +446,10 @@ class TagHostCore : public TagBase{
                                    new TagHostCoreCoreversion(COMMON_PERAMS),
                                    new TagHostCoreResetreason(COMMON_PERAMS),
                                    new TagHostCoreChipid(COMMON_PERAMS),
-                                   new TagHostCoreCpucycles(COMMON_PERAMS)
+                                   new TagHostCoreCpucycles(COMMON_PERAMS),
+                                   new TagHostCoreUptime(COMMON_PERAMS)
                           } { }
-  TagBase* children[11];
+  TagBase* children[12];
 };
 
 class TagHostNwAddress : public TagBase{
@@ -542,9 +557,9 @@ class TagHostSsidsName : public TagBase{
   bool contentsAt(uint8_t index, String& content, int& value){
     parent->contentCount();
 
-    value = parent->contentCount();//WiFi.RSSI(index);
+    value = WiFi.RSSI(index);
     content = WiFi.SSID(index);
-    return (index < parent->contentCount());
+    return (index < parent->contentCount() -1);
   }
 };
 
@@ -558,10 +573,9 @@ class TagHostSsidsSignal : public TagBase{
     parent->contentCount();
 
     value = WiFi.RSSI(index);
-    content = WiFi.SSID(index);
-    //content = value;
-    //content += "dBm";
-    return (index < parent->contentCount());
+    content = value;
+    content += "dBm";
+    return (index < parent->contentCount() -1);
   }
 };
 
@@ -573,7 +587,7 @@ class TagHostSsids : public TagBase{
   TagBase* children[2];
   
   unsigned int contentCount(){
-    static const uint8_t UPDATE_EVERY = 10;  // seconds.
+    static const uint8_t UPDATE_EVERY = 30;  // seconds.
     uint32_t now = millis() / 1000;
     static uint32_t last_updated = 0;
     static int8_t wifi_count = -1;
@@ -600,12 +614,289 @@ class TagHost : public TagBase{
   TagBase* children[8];
 };
 
+class TagServersMqttActive : public TagBase{
+ public:
+  TagServersMqttActive(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "active"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = (active ? "Y":"N");
+    value = active; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttServicename : public TagBase{
+ public:
+  TagServersMqttServicename(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "service_name"), 
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->service_name;
+    value = active; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttHostname : public TagBase{
+ public:
+  TagServersMqttHostname(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host_name"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->host_name;
+    value = active; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttAddress : public TagBase{
+ public:
+  TagServersMqttAddress(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = ip_to_string(p_host->address);
+    value = active; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttPort : public TagBase{
+ public:
+  TagServersMqttPort(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "port"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->port;
+    value = p_host->port; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttServicevaliduntil : public TagBase{
+ public:
+  TagServersMqttServicevaliduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "service_valid_until"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->service_valid_until;
+    value = p_host->service_valid_until; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttHostvaliduntil : public TagBase{
+ public:
+  TagServersMqttHostvaliduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host_valid_until"), 
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->host_valid_until;
+    value = p_host->host_valid_until; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttAddressvaliduntil : public TagBase{
+ public:
+  TagServersMqttAddressvaliduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address_valid_until"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->ipv4_valid_until;
+    value = p_host->ipv4_valid_until; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttSuccesscounter : public TagBase{
+ public:
+  TagServersMqttSuccesscounter(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "success_counter"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    content = p_host->success_counter;
+    value = p_host->success_counter; 
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqttConnectionattempts : public TagBase{
+ public:
+  TagServersMqttConnectionattempts(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "connection_attempts"),
+                        children{ } {}
+  TagBase* children[0];
+  bool contentsAt(uint8_t index, String& content, int& value){
+    Host* p_host;
+    bool active;
+    brokers->SetIterater(index);
+    brokers->GetLastHost(&p_host, active);
+    value = p_host->success_counter + p_host->fail_counter; 
+    content = value;
+    return (index < parent->contentCount() -1);
+  }
+};
+
+class TagServersMqtt : public TagBase{
+ public:
+  TagServersMqtt(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mqtt"), 
+                        children{new TagServersMqttActive(COMMON_PERAMS),
+                                 new TagServersMqttServicename(COMMON_PERAMS),
+                                 new TagServersMqttHostname(COMMON_PERAMS),
+                                 new TagServersMqttAddress(COMMON_PERAMS),
+                                 new TagServersMqttPort(COMMON_PERAMS),
+                                 new TagServersMqttServicevaliduntil(COMMON_PERAMS),
+                                 new TagServersMqttHostvaliduntil(COMMON_PERAMS),
+                                 new TagServersMqttAddressvaliduntil(COMMON_PERAMS),
+                                 new TagServersMqttSuccesscounter(COMMON_PERAMS),
+                                 new TagServersMqttConnectionattempts(COMMON_PERAMS)
+                        } {}
+  TagBase* children[10];
+  
+  unsigned int contentCount(){
+    Host* p_host;
+    bool active;
+    uint8_t count = 0;
+    brokers->ResetIterater();
+    while(brokers->IterateHosts(&p_host, &active)){
+      count++;
+    }
+    brokers->ResetIterater();
+    return count;
+  }
+};
+
+class TagServers : public TagBase{
+ public:
+  TagServers(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "servers"),
+                        children{new TagServersMqtt(COMMON_PERAMS),
+                        } {}
+  TagBase* children[1];
+};
+
+class TagMdnsBuffersuccess : public TagBase{
+ public:
+  TagMdnsBuffersuccess(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "buffer_success"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = mdns->packet_count - mdns->buffer_size_fail;
+    content = value;
+    return false;
+  }
+};
+
+class TagMdnsPacketcount : public TagBase{
+ public:
+  TagMdnsPacketcount(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "packet_count"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = mdns->packet_count;
+    content = value;
+    return false;
+  }
+};
+
+class TagMdnsSuccessrate : public TagBase{
+ public:
+  TagMdnsSuccessrate(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "success_rate"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 100 - (100 * mdns->buffer_size_fail / mdns->packet_count);
+    content = value + "%";
+    return false;
+  }
+};
+
+class TagMdnsLargestpacket : public TagBase{
+ public:
+  TagMdnsLargestpacket(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "largest_packet"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = mdns->largest_packet_seen;
+    content = value;
+    return false;
+  }
+};
+
+class TagMdnsBuffersize : public TagBase{
+ public:
+  TagMdnsBuffersize(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "buffer_size"),
+                                        children{} { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = BUFFER_SIZE;
+    content = value;
+    return false;
+  }
+};
+
+class TagMdns : public TagBase{
+ public:
+  TagMdns(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mdns"),
+                        children{new TagMdnsBuffersuccess(COMMON_PERAMS),
+                                 new TagMdnsPacketcount(COMMON_PERAMS),
+                                 new TagMdnsSuccessrate(COMMON_PERAMS),
+                                 new TagMdnsLargestpacket(COMMON_PERAMS),
+                                 new TagMdnsBuffersize(COMMON_PERAMS)
+                        } {}
+  TagBase* children[5];
+};
+
 class TagRoot : public TagBase{
  public:
   TagRoot(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "root"), 
                         children{new TagHost(COMMON_PERAMS),
-                                 new TagSession(COMMON_PERAMS)} {}
-  TagBase* children[2];
+                                 new TagSession(COMMON_PERAMS),
+                                 new TagServers(COMMON_PERAMS),
+                                 new TagMdns(COMMON_PERAMS)
+                        } {}
+  TagBase* children[4];
 };
 
 

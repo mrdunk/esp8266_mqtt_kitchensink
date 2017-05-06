@@ -241,6 +241,7 @@ function wsSend(){
   console.log("wsSend()", Object.getOwnPropertyNames(wsMessages).length,
               websocket.readyState, wsMessagesTimer);
   if(Object.getOwnPropertyNames(wsMessages).length === 0){
+    // Nothing in send queue.
     clearTimeout(wsMessagesTimer);
     wsMessagesTimer = undefined;
     return;
@@ -249,6 +250,7 @@ function wsSend(){
     clearTimeout(wsMessagesTimer);
     wsMessagesTimer = setTimeout(wsSend, 1000);
     wsCheck();
+    console.log("  websocket not open. TODO: reopen?");
     return;
   }
 

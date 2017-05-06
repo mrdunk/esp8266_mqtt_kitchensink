@@ -171,9 +171,8 @@ String value_from_payload(const byte* _payload, const unsigned int length, const
 }
 
 void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
-                  String* return_topics, String* return_payloads)
+                  std::function< void(String&, String&) > callback)
 {
-  int return_pointer = 0;
   Serial.print(topic);
   Serial.print(" : ");
   Serial.println(payload);
@@ -200,15 +199,13 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
   if(compare_addresses(address_segments, host_all)){
     if(command == "solicit"){
       //Serial.println("Announce host.");
-      toAnnounceHost(config, return_topics[return_pointer], return_payloads[return_pointer]);
-      return_pointer++;
+      String host_topic;
+      String host_payload;
+      toAnnounceHost(config, host_topic, host_payload);
+      callback(host_topic, host_payload);
     } else if(command == "learn"){
       Serial.println(payload);
       String name_list[MAX_TAG_RECURSION];
-      //name_list[0] = "host";
-      //name_list[1] = "nw";
-      //name_list[2] = "gateway";
-      //name_list[3] = "session";
       String tag_name = valueFromStringPayload(payload, "name");
       parse_tag_name(tag_name, name_list);
 
@@ -224,7 +221,7 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
         Serial.println();
 
 
-        StaticJsonBuffer<500> jsonBuffer;
+        StaticJsonBuffer<300> jsonBuffer;
         JsonObject& root = jsonBuffer.createObject();
         for(int i = 0; i < 100; i++){
           root["name"] = tag_name;
@@ -242,27 +239,23 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
           root["content"] = content;
           root["value"] = value;
           root["sequence"] = i;
+          root["total"] = final->getParent()->contentCount();
 
-        
-          //root[""] = ;
-          //root[""] = ;
+          String host_topic = "";
+          String host_payload;
+          root.printTo(host_payload);
+          callback(host_topic, host_payload);
 
-          return_topics[return_pointer] = "";
-          root.printTo(return_payloads[return_pointer]);
-
-          return_pointer++;
-          if(return_pointer >= MAX_DEVICES +1){
-            break;
-          }
           if(!more){
             break;
           }
         }
       } else {
         Serial.println("NULL");
-        return_payloads[return_pointer] =
+        String host_topic = "";
+        String host_payload =
           "{\"state\":\"missing\", \"name\":\"" + tag_name + "\",\"_command\":\"teach\"}";
-          return_pointer++;
+        callback(host_topic, host_payload);
       }
     }
   }
@@ -275,11 +268,11 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
 			if(command != "solicit"){
 				io->changeState(config->devices[i], command);
       }
-      if(return_pointer < MAX_DEVICES +1){
-        io->toAnnounce(config->devices[i], return_topics[return_pointer],
-            return_payloads[return_pointer]);
-        return_pointer++;
-      }
+
+      String host_topic;
+      String host_payload;
+      io->toAnnounce(config->devices[i], host_topic, host_payload);
+      callback(host_topic, host_payload);
 		}
   }
 }

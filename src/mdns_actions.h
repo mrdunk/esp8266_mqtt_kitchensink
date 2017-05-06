@@ -101,6 +101,11 @@ class MdnsLookup {
   bool IterateHosts(Host** host, bool* active);
 
   void ResetIterater(){ iterator = -1; }
+  void SetIterater(unsigned int index){
+    Host* p_host;
+    bool active;
+    while(IterateHosts(&p_host, &active) && index-- > 0);    
+  }
 
  private:
   void CleanBuffer();

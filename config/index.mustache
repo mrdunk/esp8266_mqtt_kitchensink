@@ -19,7 +19,7 @@
       <dt>session.overrideauth</dt>
       <dd>{{session.overrideauth}}</dd>
       <dt>session.validuntil</dt>
-      <dd>{{session.validuntil}}&nbsp&nbsp(now: {{host.uptime}})</dd>
+      <dd>{{session.validuntil}}&nbsp&nbsp(now: {{host.core.uptime}})</dd>
       <dt>session.valid</dt>
       <dd>{{session.valid}}</dd>
 			<dt>&nbsp</dt><dd>&nbsp</dd>
@@ -36,7 +36,7 @@
       
       <dt>&nbsp</dt><dd>&nbsp</dd>
 
-      <dt>CPU frequency</dt><dd>{{host.cpu_freqency}}</dd>
+      <dt>CPU frequency</dt><dd>{{host.core.cpu_speed}}</dd>
       <dt>Flash size</dt><dd>{{host.core.flash_size}}</dd>
       <dt>Flash space</dt>
       <dd>{{host.core.flash_free}} / {{host.core.flash_size}}&nbsp;&nbsp;
@@ -49,7 +49,7 @@
       <dt>&nbsp</dt><dd>&nbsp</dd>
       
       <dt>Analogue in</dt><dd>{{io.analogue_in}}</dd>
-      <dt>Uptime</dt><dd>{{host.uptime}} seconds</dd>
+      <dt>Uptime</dt><dd>{{host.core.uptime}} seconds</dd>
 
       <dt>&nbsp</dt><dd>&nbsp</dd>
       
@@ -76,7 +76,7 @@
               <td>{{port}}</td>
               <td>{{service_valid_until}}</td>
               <td>{{host_valid_until}}</td>
-              <td>{{ipv4_valid_until}}</td>
+              <td>{{address_valid_until}}</td>
               <td>{{success_counter}} / {{connection_attempts}}</td>
           </tr>
           {{/servers.mqtt}}
@@ -85,10 +85,10 @@
       <dt>&nbsp</dt><dd>&nbsp</dd>
 
       <dt>mDNS decode success rate</dt>
-        <dd>{{mdns.buffer_sucess}} / {{mdns.packet_count}}
+        <dd>{{mdns.buffer_success}} / {{mdns.packet_count}}
            &nbsp&nbsp&nbsp{{mdns.success_rate}}%</dd>
       <dt>Largest mDNS packet size</dt>
-        <dd>{{mdns.largest_packet_seen}} / {{host.buffer_size}} bytes</dd>
+        <dd>{{mdns.largest_packet}} / {{host.buffer_size}} bytes</dd>
       <dt>&nbsp</dt><dd>&nbsp</dd>
       <dt>Configure</dt><dd><a href="configure">go</a></dd>
     </dl>

@@ -67,13 +67,9 @@ void Mqtt::callback(const char* _topic, const byte* _payload, const unsigned int
     payload += (char)_payload[i];
   }
   Serial.println(payload);
-  
-  String return_topics[MAX_DEVICES +1];
-  String return_payloads[MAX_DEVICES +1];
-  actOnMessage(&io, &config, topic, payload, return_topics, return_payloads);
-  for(int i = 0; i < MAX_DEVICES +1; i++){
-    publish(return_topics[i], return_payloads[i]);
-  }
+
+  auto publish_callback = [&](String& t, String& p) {publish(t, p);};  
+  actOnMessage(&io, &config, topic, payload, publish_callback);
 }
 
 void Mqtt::publish(const String topic, const String payload){
