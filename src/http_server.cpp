@@ -54,6 +54,7 @@ HttpServer::HttpServer(char* _buffer,
   esp8266_http_server.on("/set/", [&]() {onSet();});
   esp8266_http_server.on("/reset", [&]() {onReset();});
   esp8266_http_server.on("/reset/", [&]() {onReset();});
+  esp8266_http_server.on("/filenames.sys", [&]() {fileBrowser(true);});
   esp8266_http_server.on("/get", [&]() {onFileOperations();});
   esp8266_http_server.on("/pull", [&]() {pullFiles();});
   esp8266_http_server.on("/login", [&]() {handleLogin();});
@@ -85,15 +86,10 @@ void HttpServer::fetchCookie(){
   config->session_token_provided = 0;
   if (esp8266_http_server.hasHeader("Cookie")){
     //config->session_token_provided = esp8266_http_server.header("Cookie");
-    Serial.println(esp8266_http_server.header("Cookie"));
     if(esp8266_http_server.header("Cookie").startsWith("ESPSESSIONID=")){
-      Serial.println("*");
       String cookie =
         esp8266_http_server.header("Cookie").substring(strlen("ESPSESSIONID="));
       config->session_token_provided = strtoul(cookie.c_str(), NULL, 10);
-      Serial.println(esp8266_http_server.header("Cookie").substring(strlen("ESPSESSIONID=")));
-      Serial.println(cookie);
-      Serial.println(config->session_token_provided);
     }
   }
 }
@@ -298,7 +294,7 @@ void HttpServer::loop(){
 }
 
 void  HttpServer::onRoot(){
-  onFileOperations("index.mustache");
+  onFileOperations("loader.html");
 }
 
 void HttpServer::onTest(){
@@ -380,99 +376,29 @@ void HttpServer::onFileOperations(const String& _filename){
       bufferAppend("Successfully deleted ");
       bufferAppend(filename);
       esp8266_http_server.send(200, "text/plain", buffer);
-    } else if(esp8266_http_server.hasArg("action") and
-        esp8266_http_server.arg("action") == "raw")
-    {
-      Serial.print("Displaying raw mustache file: ");
-      Serial.println(filename);
-
-      if(!fileOpen(filename)){
-        bufferAppend("\nUnsuccessful.\n");
-        esp8266_http_server.send(404, "text/plain", buffer);
-        return;
-      }
-      
-      esp8266_http_server.streamFile(file, "text/plain");
-
-      fileClose();
-      return;
-    } else if(esp8266_http_server.hasArg("action") and
-        esp8266_http_server.arg("action") == "no_compile")
-    {
-      Serial.print("Displaying mustache file without compiling: ");
-      Serial.println(filename);
-
-      if(!fileOpen(filename)){
-        bufferAppend("\nUnsuccessful.\n");
-        esp8266_http_server.send(404, "text/plain", buffer);
-        return;
-      }
-      
-      esp8266_http_server.streamFile(file, mime(filename));
-
-      fileClose();
-      return;
-    } else if (!filename.endsWith(".mustache")){
-      Serial.print("Displaying file: ");
-      Serial.println(filename);
-
-      if(!fileOpen(filename)){
-        bufferAppend("\nUnsuccessful.\n");
-        esp8266_http_server.send(404, "text/plain", buffer);
-        return;
-      }
-      
-      esp8266_http_server.streamFile(file, mime(filename));
-
-      fileClose();
-      return;
     } else {
-      // Perform markup on .mustache template file.
+      Serial.print("Displaying file: ");
+      Serial.print(filename);
+      
       if(!fileOpen(filename)){
         bufferAppend("\nUnsuccessful.\n");
         esp8266_http_server.send(404, "text/plain", buffer);
         return;
       }
       
-      esp8266_http_server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-
+      String mime_type = mime(filename);
       if(esp8266_http_server.hasArg("action") and
-          esp8266_http_server.arg("action") == "compiled_source"){
-        Serial.print("Displaying compiled_source for: ");
-        Serial.println(filename);
-        esp8266_http_server.send(200, "text/plain", "");
-      } else {
-        Serial.print("Displaying: ");
-        Serial.println(filename);
-        esp8266_http_server.send(200, mime(filename), "");
+          esp8266_http_server.arg("action") == "raw")
+      {
+        Serial.print("  (raw)");
+        mime_type = "text/plain";
       }
+      Serial.println();
 
-      CompileMustache compileMustache(buffer, buffer_size, config, brokers, mdns,
-          mqtt, io, config->session_token_provided);
+      esp8266_http_server.sendHeader("Cache-Control", "max-age=3600");
+      esp8266_http_server.streamFile(file, mime_type);
 
-      int list_depth = 0;
-      bool parsing_list = false;
-      int buffer_in_len = 500;
-      char* buffer_in = (char*)malloc(buffer_in_len);
-      int buffer_out_len = 1000;
-      char* buffer_out = (char*)malloc(buffer_out_len);
-      buffer_in[0] = '\0';
-      buffer_out[0] = '\0';
-      while(fileRead(buffer_in, buffer_in_len)){
-        compileMustache.parseBuffer(buffer_in, buffer_in_len,
-            buffer_out, buffer_out_len,
-            list_depth, parsing_list);
-        if(strlen(buffer_out)){
-          esp8266_http_server.sendContent(buffer_out);
-        }
-        buffer_out[0] = '\0';
-      }
-      free(buffer_in);
-      free(buffer_out);
-
-      esp8266_http_server.sendHeader("Connection", "close");
       fileClose();
-
       return;
     }
   } else {
@@ -484,7 +410,7 @@ void HttpServer::onFileOperations(const String& _filename){
   esp8266_http_server.send(200, "text/plain", buffer);
 }
 
-void HttpServer::fileBrowser(){
+void HttpServer::fileBrowser(bool names_only){
   if(!SPIFFS.begin()){
     Serial.println("WARNING: Unable to SPIFFS.begin()");
     return;
@@ -493,16 +419,24 @@ void HttpServer::fileBrowser(){
   while(dir.next()){
     String filename = dir.fileName();
     filename.remove(0, 1);
+    //Serial.println(filename);
 
     File file = dir.openFile("r");
-    String size(file.size());
+    String size((float)file.size() / 1024);
     file.close();
 
-    bufferAppend("<a href='get?filename=" + filename + "'>" + filename + "</a>" +
-        "\t" + size + "<br>");
+    if(names_only){
+      bufferAppend(filename + "\r\n");
+    } else {
+      bufferAppend("<a href='" + filename + "'>" + filename + "</a>\t" + size + "k<br>");
+    }
   }
   SPIFFS.end();
-  esp8266_http_server.send(200, "text/html", buffer);
+  if(names_only){
+    esp8266_http_server.send(200, "text/plain", buffer);
+  } else {
+    esp8266_http_server.send(200, "text/html", buffer);
+  }
   return;
 }
 
@@ -702,7 +636,11 @@ bool HttpServer::bufferAppend(const String& to_add){
 
 bool HttpServer::bufferAppend(const char* to_add){
   strncat(buffer, to_add, buffer_size - strlen(buffer) -1);
-  return ((buffer_size - strlen(buffer) -1) >= strlen(to_add));
+  if((buffer_size - strlen(buffer) -1) >= strlen(to_add)){
+    return true;
+  }
+  Serial.println("HttpServer::bufferAppend  Buffer full.");
+  return false;
 }
 
 bool HttpServer::bufferInsert(const String& to_insert){

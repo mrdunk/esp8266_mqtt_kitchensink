@@ -12,11 +12,15 @@ function Tag(){
 
 var Parser = 
 {
-  tag_root : new Tag,
+  tag_root : undefined,
   tag_pointer : undefined,
   re_tag : new RegExp('{{{?#?/?\\^?[\\w|.]+}?}}', 'g'),
 
-  init : function(){
+  init : function(tag_root){
+    if(tag_root === undefined){
+      tag_root = new Tag;
+    }
+    this.tag_root = tag_root;
     this.tag_root.name = "root";
     this.tag_root.type = types[0];
     this.tag_pointer = this.tag_root;
@@ -24,7 +28,6 @@ var Parser =
   },
 
   examineTag : function(tag){
-    console.log(this.tag_pointer);
     tag.parent_ = this.tag_pointer;
     var name = tag.name.substr(2, tag.name.length -4);
     if(name.startsWith("{")){
@@ -55,13 +58,14 @@ var Parser =
     tag.name = name;
   },
 
+  /* Read through file line by line, identify tags and store in recursive tag
+     structure.*/
   parse : function(template){
     var lines = template.split('\n');
     for(var i = 0;i < lines.length;i++){
       var line = lines[i];
 
       if(line.trim() !== ""){
-        console.log(lines[i]);
         var matches;
         while((matches = this.re_tag.exec(line)) !== null){
           var tag = new Tag;
@@ -69,12 +73,12 @@ var Parser =
           tag.line = i;
           tag.pos = matches.index;
           this.examineTag(tag);
-          console.log(tag);
         }
       }
     }
   },
 
+  /* Loop through tag data structure and request data from server. */
   requestData : function(tag, parent_name=""){
     if(parent_name === "root"){
       parent_name = "";
@@ -94,10 +98,3 @@ var Parser =
     }
   }
 }
-
-window.addEventListener("load", function(){
-  Parser.init();
-  Parser.parse(document.getElementById("template").innerHTML);
-  console.log(Parser.tag_root);
-  Parser.requestData(Parser.tag_root, "root");
-}, false);

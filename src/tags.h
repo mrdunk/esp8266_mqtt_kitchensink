@@ -845,7 +845,8 @@ class TagMdnsSuccessrate : public TagBase{
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     value = 100 - (100 * mdns->buffer_size_fail / mdns->packet_count);
-    content = value + "%";
+    content = value;
+    content += "%";
     return false;
   }
 };

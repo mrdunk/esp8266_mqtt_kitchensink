@@ -78,7 +78,7 @@ class HttpServer{
   bool isAuthentified(bool redirect=true);
   void handleNotFound();
   void onFileOperations(const String& _filename = "");
-  void fileBrowser();
+  void fileBrowser(bool names_only=false);
   void onRoot();
   const String mime(const String& filename);
   void onSet();

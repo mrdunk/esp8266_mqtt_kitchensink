@@ -7,6 +7,7 @@ var KEEPALIVE_TIME = 2000;
 var counter = 0;
 var wsMessages = {};
 var wsMessagesTimer;
+var ws_data = {};
 
 function wsCodes(value){
   var codes = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
@@ -167,6 +168,33 @@ function wsStart(){
       updatePage(payload);
       if(payload._command === "teach"){
         wsDeQueue(payload);
+
+        var path = payload.name.split(".");
+        var container = ws_data;
+        for(var i = 0; i < path.length -1; i++){
+          if(container[path[i]] === undefined){
+            if(payload.total === 0 || i < path.length -2){
+              container[path[i]] = {};
+            } else {
+              container[path[i]] = [];
+            }
+          }
+          container = container[path[i]];
+        }
+
+        var last = path[path.length -1];
+
+        if(payload.total === 0){
+          container[last] = payload.content;
+        } else {
+          if(container[payload.sequence] === undefined){
+            container[payload.sequence] = {};
+          }
+          if(container[payload.sequence][last] === undefined){
+            container[payload.sequence][last] = {};
+          }
+          container[payload.sequence][last] = payload.content;
+        }
       }
     }
   };
@@ -286,7 +314,3 @@ function wsDeQueue(message){
     wsSend();
   }
 }
-
-
-window.addEventListener("load", wsInit, false);
-

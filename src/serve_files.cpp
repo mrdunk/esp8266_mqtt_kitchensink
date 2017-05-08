@@ -46,14 +46,16 @@ bool getPage(const String& filename, File& file, const Config& config) {
   int status_code = 0;
   String content_type = "";
 
+  wdt_reset();
   // If there are incoming bytes, print them
+  uint8_t linecount = 0;
 	while (wifiClient.connected()){
-    Serial.print(".");
-    wdt_reset();
+    //wdt_reset();
 		if(wifiClient.available()){
 			String line = wifiClient.readStringUntil('\n');
 
       if(!header_received){
+        Serial.print(".");
         line.trim();
         if(line.startsWith("HTTP/") and line.endsWith("OK")){
           line = line.substring(line.indexOf(" "));
@@ -79,7 +81,14 @@ bool getPage(const String& filename, File& file, const Config& config) {
         }
       } else {
         // Content.
+        if(linecount++ == 50){
+          linecount = 0;
+          Serial.println();
+        }
+
+        Serial.print("+");
 	      file.println(line);
+        Serial.print("-");
       }
     }
   }
