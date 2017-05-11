@@ -2,10 +2,24 @@ var Loader =
 {
   files: {},
   selected_file: "index.mustache",
+  insert_content_timer: undefined,
+  insert_content_callback_timer: undefined,
 
   init: function(){
-    console.log(window.location.search);
-    var url = window.location.search;
+    this.hashChange();
+    var context = this;
+    window.onhashchange = function(){console.log("hash change");
+                                     context.hashChange();
+                                     context.insertContent()};
+
+    this.loadFile(this.selected_file);
+    this.loadFilenames();
+    ws_receive_callbacks.push(function(path){context.insertContent(path);});
+  },
+
+  hashChange: function(){
+    console.log(window.location.hash);
+    var url = window.location.hash;
     var start_filename = url.indexOf("filename=");
     if(start_filename > 0){
       start_filename += "filename=".length;
@@ -15,9 +29,6 @@ var Loader =
       }
       this.selected_file = (url.substring(start_filename, end_filename));
     }
-
-    this.loadFile(this.selected_file);
-    //this.loadFilenames();
   },
 
   loadFile: function(filename){
@@ -34,16 +45,25 @@ var Loader =
   },
 
   fileCallback: function(inner_context, outer_context, filename){
-    console.log(inner_context);
-    console.log(outer_context);
+    //console.log(inner_context);
+    //console.log(outer_context);
     if(filename === "filenames.sys"){
+      var container = document.getElementById("files");
       var names = inner_context.responseText.split("\r\n");
       for(var i = 0; i < names.length; i++){
         var filename = names[i];
-        if(filename.split(".")[1] === "mustache" &&
-            outer_context.files[filename] === undefined){
-          console.log(filename);
-          outer_context.files[filename] = {};
+        if(filename.split(".")[1] === "mustache"){
+          var element = document.createElement("a");
+          var text = document.createTextNode(filename);
+          element.appendChild(text);
+          element.setAttribute('href', "#filename=" + filename);
+          container.appendChild(element);
+          container.appendChild(document.createElement("br"));
+
+          if(outer_context.files[filename] === undefined){
+            console.log(filename);
+            outer_context.files[filename] = {};
+          }
         }
       }
       outer_context.loadRemainingFiles();
@@ -59,7 +79,7 @@ var Loader =
       Parser.parse(outer_context.files[filename].raw);
       Parser.requestData(Parser.tag_root, "root");
 
-      console.log(outer_context.files[filename]);
+      console.log(filename, outer_context.files[filename]);
 
       if(filename === outer_context.selected_file){
         outer_context.insertContent();
@@ -76,41 +96,66 @@ var Loader =
         if(this.files[filename].raw === undefined){
           var context = this;
           load_timers++;
-          setTimeout(function(){context.loadFile(filename);}, 11000 * load_timers);
-          //this.loadFile(filename);
+          this.loadFile(filename);
         }
       }
     }
   },
 
-  insertContent: function(){
-    var container = document.getElementById("content");
-    container.innerHTML = "";
-    
+  insertContent: function(path){
+    if(this.insert_content_timer !== undefined &&
+        (Date.now() - this.insert_content_timer < 1000))
+    {
+      window.clearTimeout(this.insert_content_callback_timer);
+      this.insert_content_callback_timer = window.setTimeout(this.insertContent.bind(this), 1000);
+      return;
+    }
+    this.insert_content_timer = Date.now();
+
     var filename = this.selected_file;
+    if(this.files[filename] === undefined || this.files[filename].raw === undefined){
+      console.log(filename + " not loaded yet");
+      return;
+    }
+    console.log("insertContent(" + filename + ")", ws_data);
+
     var lines = this.files[filename].raw.split('\n');
     var children = this.files[filename].tag_root.children;
     var new_lines = [];
     var last_line = 0;
     var last_pos = 0;
     
-      var last = this.contentChunk(children, last_line, last_pos, lines, new_lines, [],
-                                   lines.length -1, lines[lines.length -1].length);
-      last_line = last.line;
-      last_pos = last.pos;
+    var last = this.contentChunk(children, last_line, last_pos, lines, new_lines, [],
+        lines.length -1, lines[lines.length -1].length);
+    last_line = last.line;
+    last_pos = last.pos;
 
-    //var content = "";
-    for(var i=0; i < new_lines.length; i++){
-      var text = document.createTextNode(new_lines[i]);
-      container.appendChild(text);
-      container.appendChild(document.createElement('br'));
-      //content += new_lines[i];
+    var container = document.getElementById("content");
+    container.innerHTML = "";
+    
+    if(true){
+      var div = document.createElement('div');
+      var content = "";
+      for(var i=0; i < new_lines.length; i++){
+        content += new_lines[i];
+      }
+      div.innerHTML = content;
+      container.appendChild(div);
+    } 
+    if(true){
+      for(var i=0; i < new_lines.length; i++){
+        var text = document.createTextNode(new_lines[i]);
+        container.appendChild(text);
+        container.appendChild(document.createElement('br'));
+      }
     }
-    //container.innerHTML = content;
   },
 
   contentChunk: function(children, last_line, last_pos, lines, new_lines,
-                         parent_path, final_line, final_pos){
+                         parent_path, final_line, final_pos, index){
+    if(index === undefined){
+      index = 0;
+    }
     for(var i=0; i < children.length; i++){
       var child = children[i];
 
@@ -121,14 +166,14 @@ var Loader =
       var this_line = child.line;
       for(var l = last_line; l < this_line; l++){
         if(last_pos === 0){
-          new_lines.push(l + " | ");
+          new_lines.push("");
         }
         new_lines[new_lines.length -1] += lines[l].substring(last_pos, lines[l].length);
         last_pos = 0;
         last_line = l;
       }
       if(last_line !== this_line){
-        new_lines.push(this_line + " | ");
+        new_lines.push("");
       }
       
       last_line = this_line;
@@ -137,36 +182,83 @@ var Loader =
       last_pos = child.pos + child.name.length;
       if(child.type === "name"){
         //console.log(child);
-        new_lines[new_lines.length -1] += this.tagContent(path);
+        new_lines[new_lines.length -1] += this.tagContent(path, index);
         // "name" tag is 4 bytes long: {{XXX}}
         last_pos += 4;
       } else if(child.type === "contains") {
+        console.log("*", this.tagContent(path, index));
         // Other tags are 5 bytes. eg: {{#XXX}}
         last_pos += 5;
 
-        var grand_children = this.tagContent(path);
-        //console.log(child);
-        console.log(grand_children);
-        var last = {"line": last_line, "pos": last_pos};
-        for(var c=0; grand_children instanceof Array && c < grand_children.length; c++){
+        var grand_children = this.tagContent(path, index);
+        if(grand_children instanceof Array){
+          // pass
+        } else if(grand_children === "0" || grand_children === ""){
+          console.log(0);
+          grand_children = [];
+        } else {
+          console.log(1);
+          grand_children = [true];
+        }
+        var last;
+        if(grand_children.length === 0){
+          var next_child = children[i +1];  // "end" tag.
+          if(next_child !== undefined){
+            last.line = next_child.line;
+            last.pos = next_child.pos;
+          }
+        }
+        for(var c=0; c < grand_children.length; c++){
+          console.log(c);
           var child_last_line = last_line;
           var child_last_pos = last_pos;
 
           var closing_tag = children[i +1];
-          console.log(closing_tag);
+          //console.log(closing_tag);
 
           path = parent_path.concat(child.name.split("."));
           last = this.contentChunk(child.children, child_last_line, child_last_pos,
-              lines, new_lines, path, closing_tag.line, closing_tag.pos);
+              lines, new_lines, path, closing_tag.line, closing_tag.pos, c);
           child_last_line = last.line;
           child_last_pos = last.pos;
 
-
-          new_lines.push(this_line + " | ");
-
+          new_lines.push("");
         }
         last_line = last.line;
         last_pos = last.pos;
+      } else if(child.type === "not") {
+        console.log("~", this.tagContent(path, index));
+        // Other tags are 5 bytes. eg: {{#XXX}}
+        last_pos += 5;
+
+        var grand_children = this.tagContent(path, index);
+        if(grand_children.length === 0 || grand_children === "0" || grand_children === ""){
+          console.log(0);
+          // No grandchildren so display line.
+          var last = {"line": last_line, "pos": last_pos};
+          
+          var child_last_line = last_line;
+          var child_last_pos = last_pos;
+
+          var closing_tag = children[i +1];
+
+          path = parent_path.concat(child.name.split("."));
+          last = this.contentChunk(child.children, child_last_line, child_last_pos,
+              lines, new_lines, path, closing_tag.line, closing_tag.pos, 0);
+
+          new_lines.push("");
+
+          last_line = last.line;
+          last_pos = last.pos;
+        } else {
+          console.log(1);
+          // Grandchildren exist so skip to end of line.
+          var next_child = children[i +1];  // "end" tag.
+          if(next_child !== undefined){
+            last_line = next_child.line;
+            last_pos = next_child.pos;
+          }
+        }
       } else {
         // Other tags are 5 bytes. eg: {{#XXX}}
         last_pos += 5;
@@ -174,11 +266,11 @@ var Loader =
     }
     
     // Last bit with no tags in it.
-    for(var l = last_line; l <= final_line; l++){
+    for(var l = last_line; l < final_line; l++){
       if(last_pos === 0){
-        new_lines.push(l + " | ");
+        new_lines.push("");
       }
-      if(l == final_line){
+      if(l === final_line){
         // Only copy as far as final_pos the last time through.
         new_lines[new_lines.length -1] += lines[l].substring(last_pos, final_pos);
       } else {
@@ -186,17 +278,14 @@ var Loader =
       }
       last_pos = 0;
     }
-    return {"line": last_line, "pos": last_pos};
+    return {"line": final_line, "pos": last_pos};
   },
 
-  tagContent: function(path){
+  tagContent: function(path, index){
     var data_pointer = ws_data;
     for(var i=0; i < path.length; i++){
       if(data_pointer instanceof Array){
-        //return "(Array)";
-        console.log(data_pointer);
-        data_pointer = data_pointer[0];
-        //return data_pointer;
+        data_pointer = data_pointer[index];
       }
       if(data_pointer === undefined || data_pointer[path[i]] === undefined){
         return "(XXXX)";
@@ -211,6 +300,5 @@ var Loader =
 window.addEventListener("load", function(){
   wsInit();
   Loader.init();
-  setTimeout(function(){Loader.insertContent();}, 10000);
 }, false);
 

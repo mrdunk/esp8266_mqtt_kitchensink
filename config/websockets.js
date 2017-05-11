@@ -7,7 +7,15 @@ var KEEPALIVE_TIME = 2000;
 var counter = 0;
 var wsMessages = {};
 var wsMessagesTimer;
+var ws_receive_callbacks = [];
 var ws_data = {};
+
+if(localStorage.esp8266_kitchensink === ""){
+  localStorage.esp8266_kitchensink = "{}";
+} else {
+  //console.log(localStorage.esp8266_kitchensink);
+  //ws_data = JSON.parse(localStorage.esp8266_kitchensink);
+}
 
 function wsCodes(value){
   var codes = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
@@ -195,6 +203,12 @@ function wsStart(){
           }
           container[payload.sequence][last] = payload.content;
         }
+
+        localStorage.esp8266_kitchensink = JSON.stringify(ws_data);
+
+        for(var j = 0; j < ws_receive_callbacks.length; j++){
+          ws_receive_callbacks[j](path);
+        }
       }
     }
   };
@@ -251,7 +265,7 @@ function wsInit() {
 };
 
 function wsQueueSend(message){
-  console.log("wsQueueSend(", message, ")", message.name, wsMessagesTimer);
+  //console.log("wsQueueSend(", message, ")", message.name, wsMessagesTimer);
 
   if(message !== undefined){
     if(message.name === undefined){
@@ -266,8 +280,8 @@ function wsQueueSend(message){
 }
 
 function wsSend(){
-  console.log("wsSend()", Object.getOwnPropertyNames(wsMessages).length,
-              websocket.readyState, wsMessagesTimer);
+  //console.log("wsSend()", Object.getOwnPropertyNames(wsMessages).length,
+  //            websocket.readyState, wsMessagesTimer);
   if(Object.getOwnPropertyNames(wsMessages).length === 0){
     // Nothing in send queue.
     clearTimeout(wsMessagesTimer);

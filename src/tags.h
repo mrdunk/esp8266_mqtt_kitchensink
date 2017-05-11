@@ -141,10 +141,19 @@ class TagSessionValid : public TagBase{
       content += remaining;
       value = remaining;
     } else {
-      content = "expired";
+      content = "0";
       value = 0;
     }
     return false;
+  }
+
+  unsigned int contentCount(){
+    const unsigned int now = millis() / 1000;
+    const int remaining = config->session_time + SESSION_TIMEOUT - now;
+    if(config->sessionValid() && remaining > 0){
+      return 1;
+    }
+    return 0;
   }
 };
 
