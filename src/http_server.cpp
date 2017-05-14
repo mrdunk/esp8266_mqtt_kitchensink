@@ -344,6 +344,7 @@ void HttpServer::onFileOperations(const String& _filename){
           esp8266_http_server.send(404, "text/plain", buffer);
           return;
         }
+        config->files = "0";
         bufferAppend("Successfully got file from server.\n");
         esp8266_http_server.send(200, "text/plain", buffer);
         return;
@@ -372,6 +373,7 @@ void HttpServer::onFileOperations(const String& _filename){
         return;
       }
       SPIFFS.end();
+      config->files = "0";
       buffer[0] = '\0';
       bufferAppend("Successfully deleted ");
       bufferAppend(filename);

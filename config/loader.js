@@ -11,7 +11,7 @@ var Loader =
     window.onhashchange = function(){console.log("hash change");
                                      context.hashChange();
                                      context.insertContent()};
-
+    this.requestData();
     this.loadFile(this.selected_file);
     this.loadFilenames();
     ws_receive_callbacks.push(function(path){context.insertContent(path);});
@@ -45,8 +45,6 @@ var Loader =
   },
 
   fileCallback: function(inner_context, outer_context, filename){
-    //console.log(inner_context);
-    //console.log(outer_context);
     if(filename === "filenames.sys"){
       var container = document.getElementById("files");
       var names = inner_context.responseText.split("\r\n");
@@ -61,7 +59,6 @@ var Loader =
           container.appendChild(document.createElement("br"));
 
           if(outer_context.files[filename] === undefined){
-            console.log(filename);
             outer_context.files[filename] = {};
           }
         }
@@ -77,7 +74,6 @@ var Loader =
       outer_context.files[filename].tag_root = new Tag;
       Parser.init(outer_context.files[filename].tag_root);
       Parser.parse(outer_context.files[filename].raw);
-      Parser.requestData(Parser.tag_root, "root");
 
       console.log(filename, outer_context.files[filename]);
 
@@ -125,14 +121,13 @@ var Loader =
     var last_line = 0;
     var last_pos = 0;
     
-    var last = this.contentChunk(children, last_line, last_pos, lines, new_lines, [],
+    this.contentChunk(children, last_line, last_pos, lines, new_lines, [],
         lines.length -1, lines[lines.length -1].length);
-    last_line = last.line;
-    last_pos = last.pos;
 
+    
     var container = document.getElementById("content");
     container.innerHTML = "";
-    
+
     if(true){
       var div = document.createElement('div');
       var content = "";
@@ -142,13 +137,43 @@ var Loader =
       div.innerHTML = content;
       container.appendChild(div);
     } 
-    if(true){
+    if(false){
       for(var i=0; i < new_lines.length; i++){
         var text = document.createTextNode(new_lines[i]);
         container.appendChild(text);
         container.appendChild(document.createElement('br'));
       }
     }
+  },
+
+  // Search down the parent_path for a matching partial_path in the ws_data object.
+  getFullPath : function(parent_path, partial_path){
+    function validPath(path){
+      var pointer = ws_data;
+      for(var i = 0; i < path.length; i++){
+        if(pointer instanceof Array){
+          pointer = pointer[0];
+        }
+        if(pointer === undefined){
+          return false;
+        }
+        pointer = pointer[path[i]];
+        if(pointer === undefined){
+          return false;
+        }
+      }
+      return true;
+    }
+
+    partial_path = partial_path.split(".");
+    var test_path; 
+    for(var i = parent_path.length; i >= 0; i--){
+      test_path = parent_path.slice(0, i).concat(partial_path);
+      if(validPath(test_path)){
+        break;
+      }
+    }
+    return test_path;
   },
 
   contentChunk: function(children, last_line, last_pos, lines, new_lines,
@@ -159,9 +184,8 @@ var Loader =
     for(var i=0; i < children.length; i++){
       var child = children[i];
 
-      path = parent_path.concat(child.name.split("."));
-
-      console.log(i, path.join("."), last_line, last_pos, child.line);
+      path = this.getFullPath(parent_path, child.name);
+      console.log(i, parent_path, child.name.split("."), path);
 
       var this_line = child.line;
       for(var l = last_line; l < this_line; l++){
@@ -186,7 +210,6 @@ var Loader =
         // "name" tag is 4 bytes long: {{XXX}}
         last_pos += 4;
       } else if(child.type === "contains") {
-        console.log("*", this.tagContent(path, index));
         // Other tags are 5 bytes. eg: {{#XXX}}
         last_pos += 5;
 
@@ -194,10 +217,8 @@ var Loader =
         if(grand_children instanceof Array){
           // pass
         } else if(grand_children === "0" || grand_children === ""){
-          console.log(0);
           grand_children = [];
         } else {
-          console.log(1);
           grand_children = [true];
         }
         var last;
@@ -209,12 +230,11 @@ var Loader =
           }
         }
         for(var c=0; c < grand_children.length; c++){
-          console.log(c);
+          console.log(c, ws_data);
           var child_last_line = last_line;
           var child_last_pos = last_pos;
 
           var closing_tag = children[i +1];
-          //console.log(closing_tag);
 
           path = parent_path.concat(child.name.split("."));
           last = this.contentChunk(child.children, child_last_line, child_last_pos,
@@ -227,13 +247,11 @@ var Loader =
         last_line = last.line;
         last_pos = last.pos;
       } else if(child.type === "not") {
-        console.log("~", this.tagContent(path, index));
         // Other tags are 5 bytes. eg: {{#XXX}}
         last_pos += 5;
 
         var grand_children = this.tagContent(path, index);
         if(grand_children.length === 0 || grand_children === "0" || grand_children === ""){
-          console.log(0);
           // No grandchildren so display line.
           var last = {"line": last_line, "pos": last_pos};
           
@@ -251,7 +269,6 @@ var Loader =
           last_line = last.line;
           last_pos = last.pos;
         } else {
-          console.log(1);
           // Grandchildren exist so skip to end of line.
           var next_child = children[i +1];  // "end" tag.
           if(next_child !== undefined){
@@ -294,7 +311,17 @@ var Loader =
       }
     }
     return data_pointer;
+
+
+  },
+
+  /* Request data from server. */
+  requestData : function(){
+    var summary = {_subject: "hosts/_all",
+                   _command: "learn_all"};
+    wsQueueSend(summary);
   }
+
 };
 
 window.addEventListener("load", function(){

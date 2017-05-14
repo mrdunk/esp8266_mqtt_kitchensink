@@ -46,6 +46,7 @@ struct Config {
   uint32_t session_token_provided;
   uint32_t session_time;
   bool session_override;
+  String files;
 
   bool sessionValid();
   bool sessionExpired();

@@ -24,6 +24,9 @@
 
 /* This library does some standard parsing on incoming messages. */
 
+#include <ArduinoJson.h>        // ArduinoJson library.
+#include "FS.h"
+
 #include "config.h"
 #include "mqtt.h"
 #include "host_attributes.h"
@@ -57,63 +60,91 @@ class TagBase{
     return 0;
   }
 
-  TagBase* getChild(const String* name_list,
-                          uint8_t list_pointer=0,
-                          TagBase* best_so_far = NULL)
-  {
-    int8_t max_pointer = -1;
-    for(int8_t i = 0; i < MAX_TAG_RECURSION; i++){
-      if(name_list[i] == ""){
-        max_pointer = i -1;
-        break;
-      }
+  TagBase* matchPath(const String* name_list, uint8_t list_pointer=0) {
+    if(strcmp(name, name_list[list_pointer].c_str()) == 0 || list_pointer >= MAX_TAG_RECURSION){
+      return parent;
     }
-    
-    if(max_pointer < 0){
-      Serial.println("ERROR: name_list not populated.");
-      return NULL;
-    }
-
     for(uint8_t child = 0; child < children_len; child++){
-      base_children[child]->parent = this;
-
-      if(String(base_children[child]->name) == name_list[max_pointer]){
-        // If there is not a match under the deepest mustache recursion level
-        // we should return a match at a lower level if one exists.
-        best_so_far = base_children[child];
-      }
-
-      if(String(base_children[child]->name) == name_list[list_pointer]){
-        Serial.print(" ");
-        Serial.print(list_pointer);
-        Serial.print(" ");
-        Serial.print(child);
-        Serial.print(" ");
-        Serial.print(base_children[child]->name);
-        Serial.println(" match!");
-
-        if(name_list[list_pointer +1] == ""){
-          // The whole path matches.
-          return base_children[child];
-        } else if (TagBase* tag_child = 
-                   base_children[child]->getChild(name_list, list_pointer +1))
-        {
-          // Deeper recursion level found a match (or at least a best_so_far).
-          return tag_child;
-        }
-      }
-      // No exact match so continue iterating.
+      return matchPath(name_list, list_pointer +1);
     }
+    return this;
+  }
 
-    Serial.print("no match for ");
-    Serial.println(name_list[list_pointer]);
-    return best_so_far;
+  TagBase* getChild(uint8_t index){
+    if(index > children_len){
+      return nullptr;
+    }
+    return base_children[index];
   }
 
   TagBase* getParent(){
     return parent;
   }
- 
+
+  String getPath(){
+    String path = name;
+    TagBase* p = parent;
+    while(p && strcmp(p->name, "root") != 0){
+      path = String(p->name) + "." + path;
+      p = p->parent;
+    }
+
+    return path;
+  }
+    
+  void sendData(std::function< void(String&, String&) > callback, bool include_children=false){
+    Serial.print("sendData() ");
+    Serial.print(name);
+    Serial.print(" ");
+    Serial.println(getPath());
+
+    String content;
+    int value;
+    bool more = true;
+    uint8_t sequence = 0;
+
+    while(more){
+      {
+        StaticJsonBuffer<200> jsonBuffer;
+        JsonObject& root = jsonBuffer.createObject();
+        root["name"] = getPath();
+        root["_command"] = "teach";
+
+        more = contentsAt(sequence, content, value);
+
+        if(content == ""){
+          content = "_";
+        }
+
+        root["content"] = content;
+        root["value"] = value;
+        root["sequence"] = sequence;
+        if(parent){
+          root["total"] = parent->contentCount();
+        }
+
+        String host_topic = "";
+        String host_payload = "";
+        root.printTo(host_payload);
+
+        Serial.println(host_payload);
+
+        callback(host_topic, host_payload);
+      }
+
+      for(uint8_t child = 0; include_children && child < children_len; child++){
+        wdt_reset();
+
+        Serial.println(child);
+
+        base_children[child]->parent = this;
+        base_children[child]->sendData(callback, true);
+      }
+
+      sequence++;
+    }
+  }
+
  protected:
   Config* config;
   MdnsLookup* brokers;
@@ -122,8 +153,8 @@ class TagBase{
   Io* io;
   TagBase** base_children;
   TagBase* parent;
-  const uint8_t children_len;
  public:
+  const uint8_t children_len;
   const char* name;
 };
 
@@ -250,7 +281,7 @@ class TagHostMac : public TagBase{
 
 class TagHostUptime : public TagBase{
  public:
-  TagHostUptime(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mac"),
+  TagHostUptime(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "uptime"),
                            children{} { }
   TagBase* children[0];
   
@@ -853,9 +884,11 @@ class TagMdnsSuccessrate : public TagBase{
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
-    value = 100 - (100 * mdns->buffer_size_fail / mdns->packet_count);
-    content = value;
-    content += "%";
+    if(mdns->packet_count > 0){
+      value = 100 - (100 * mdns->buffer_size_fail / mdns->packet_count);
+      content = value;
+      content += "%";
+    }
     return false;
   }
 };
@@ -898,15 +931,263 @@ class TagMdns : public TagBase{
   TagBase* children[5];
 };
 
+class TagFsFilesFilename : public TagBase{
+ public:
+  TagFsFilesFilename(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "filename"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    unsigned int file_count = parent->contentCount();
+
+    uint16_t pointer = 1;
+    for(uint8_t i = 0; i < index; i++){
+      pointer = config->files.indexOf('|', pointer) +2;
+    }
+    uint16_t pointer_end = config->files.indexOf(',', pointer);
+    value = index;
+    content = config->files.substring(pointer, pointer_end);
+    return (index < file_count -1);
+  }
+};
+
+class TagFsFilesSize : public TagBase{
+ public:
+  TagFsFilesSize(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "size"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    unsigned int file_count = parent->contentCount();
+
+    uint16_t pointer = 1;
+    for(uint8_t i = 0; i < index; i++){
+      pointer = config->files.indexOf('|', pointer) +2;
+    }
+    uint16_t pointer_start = config->files.indexOf(',', pointer) +1;
+    uint16_t pointer_end = config->files.indexOf('|', pointer);
+    value = config->files.substring(pointer_start, pointer_end).toInt();
+    content = ((float)value / 1024);
+    content += "k";
+    return (index < file_count -1);
+  }
+};
+
+class TagFsFilesIsmustache : public TagBase{
+ public:
+  TagFsFilesIsmustache(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "is_mustache"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    String file_content;
+    int file_value;
+    bool return_val = false;
+
+    for(uint8_t i = 0; i < parent->children_len; i++){
+      if(strcmp(parent->getChild(i)->name, "filename") == 0){
+        return_val = parent->getChild(i)->contentsAt(index, file_content, file_value);
+      }
+    }
+    value = (int)(file_content.endsWith(".mustache"));
+    content = ((bool)value ? "Y":"N");
+    return return_val;
+  }
+
+  unsigned int contentCount(){
+    String content;
+    int value;
+    parent->contentsAt(0, content, value);
+    return (bool)value;
+  }
+};
+
+class TagFsFiles : public TagBase{
+ public:
+  TagFsFiles(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "files"),
+                        children{new TagFsFilesFilename(COMMON_PERAMS),
+                                 new TagFsFilesSize(COMMON_PERAMS),
+                                 new TagFsFilesIsmustache(COMMON_PERAMS)
+                        } {}
+  TagBase* children[3];
+  
+  unsigned int contentCount(){
+    int8_t file_count = 0;
+    if(config->files == "0"){
+      if(!SPIFFS.begin()){
+        Serial.println("WARNING: Unable to SPIFFS.begin()");
+        return 0;
+      }
+      config->files = "";
+      Dir dir = SPIFFS.openDir("/");
+      while(dir.next()){
+        file_count++;
+        File file = dir.openFile("r");
+        config->files += file.name();
+        config->files += ",";
+        config->files += file.size();
+        config->files += "|";
+        file.close();
+      }
+      SPIFFS.end();
+    } else {
+      for (uint16_t i=0; i < config->files.length(); i++){
+        file_count += (config->files[i] == '|');
+      }
+    }
+    return file_count;
+  }
+};
+
+class TagFsSpaceSize: public TagBase{
+ public:
+  TagFsSpaceSize(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "size"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    if(!SPIFFS.begin()){
+      Serial.println("WARNING: Unable to SPIFFS.begin()");
+      return 0;
+    }
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    value = fs_info.totalBytes;
+    content = (value / 1024);
+    content += "k";
+    SPIFFS.end();
+    return false;
+  }
+};
+
+class TagFsSpaceUsed : public TagBase{
+ public:
+  TagFsSpaceUsed(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "used"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    if(!SPIFFS.begin()){
+      Serial.println("WARNING: Unable to SPIFFS.begin()");
+      return 0;
+    }
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    value = fs_info.usedBytes;
+    content = (value / 1024);
+    content += "k";
+    SPIFFS.end();
+    return false;
+  }
+};
+
+class TagFsSpaceRemaining : public TagBase{
+ public:
+  TagFsSpaceRemaining(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "remaining"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    if(!SPIFFS.begin()){
+      Serial.println("WARNING: Unable to SPIFFS.begin()");
+      return 0;
+    }
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    value = fs_info.totalBytes - fs_info.usedBytes;
+    content = (value / 1024);
+    content += "k";
+    SPIFFS.end();
+    return false;
+  }
+};
+
+class TagFsSpaceRatioused : public TagBase{
+ public:
+  TagFsSpaceRatioused(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ratio_used"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    if(!SPIFFS.begin()){
+      Serial.println("WARNING: Unable to SPIFFS.begin()");
+      return 0;
+    }
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    if(fs_info.totalBytes > 0){
+      value = (100.0 * fs_info.usedBytes / fs_info.totalBytes);
+      content = value;
+      content += "%";
+    }
+    SPIFFS.end();
+    return false;
+  }
+};
+
+class TagFsSpaceRatioremaining : public TagBase{
+ public:
+  TagFsSpaceRatioremaining(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ratio_remaining"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    if(!SPIFFS.begin()){
+      Serial.println("WARNING: Unable to SPIFFS.begin()");
+      return 0;
+    }
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    if(fs_info.totalBytes > 0){
+      value = (100.0 * (fs_info.totalBytes - fs_info.usedBytes) / fs_info.totalBytes);
+      content = value;
+      content += "%";
+    }
+    SPIFFS.end();
+    return false;
+  }
+};
+
+class TagFsSpace : public TagBase{
+ public:
+  TagFsSpace(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "space"),
+                        children{new TagFsSpaceSize(COMMON_PERAMS),
+                                 new TagFsSpaceUsed(COMMON_PERAMS),
+                                 new TagFsSpaceRemaining(COMMON_PERAMS),
+                                 new TagFsSpaceRatioused(COMMON_PERAMS),
+                                 new TagFsSpaceRatioremaining(COMMON_PERAMS)
+                        } {}
+  TagBase* children[5];
+};
+
+class TagFs : public TagBase{
+ public:
+  TagFs(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "fs"),
+                        children{new TagFsFiles(COMMON_PERAMS),
+                                 new TagFsSpace(COMMON_PERAMS)
+                        } {}
+  TagBase* children[2];
+};
+
 class TagRoot : public TagBase{
  public:
   TagRoot(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "root"), 
                         children{new TagHost(COMMON_PERAMS),
                                  new TagSession(COMMON_PERAMS),
                                  new TagServers(COMMON_PERAMS),
-                                 new TagMdns(COMMON_PERAMS)
+                                 new TagMdns(COMMON_PERAMS),
+                                 new TagFs(COMMON_PERAMS)
                         } {}
-  TagBase* children[4];
+  TagBase* children[5];
 };
 
 

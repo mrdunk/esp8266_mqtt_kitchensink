@@ -60,7 +60,8 @@ Config config = {
   0,                  // session_token
   0,                  // session_token_provided
   0,                  // session_time
-  false               // session_override
+  false,              // session_override
+  "0"                 // files
 };
 
 

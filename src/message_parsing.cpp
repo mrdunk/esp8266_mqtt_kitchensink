@@ -203,13 +203,15 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       String host_payload;
       toAnnounceHost(config, host_topic, host_payload);
       callback(host_topic, host_payload);
+    } else if(command == "learn_all"){
+      root_tag.sendData(callback, true);
     } else if(command == "learn"){
       Serial.println(payload);
       String name_list[MAX_TAG_RECURSION];
       String tag_name = valueFromStringPayload(payload, "name");
       parse_tag_name(tag_name, name_list);
 
-      TagBase* final = root_tag.getChild(name_list); 
+      TagBase* final = root_tag.matchPath(name_list); 
       Serial.print("Final: ");
       if(final){
         TagBase* p = final;
@@ -220,36 +222,7 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
         }
         Serial.println();
 
-
-        StaticJsonBuffer<300> jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
-        for(int i = 0; i < 100; i++){
-          root["name"] = tag_name;
-          root["_command"] = "teach";
-
-          String content;
-          int value;
-          
-          bool more = final->contentsAt(i, content, value);
-          
-          if(content == ""){
-            content = "_";
-          }
-
-          root["content"] = content;
-          root["value"] = value;
-          root["sequence"] = i;
-          root["total"] = final->getParent()->contentCount();
-
-          String host_topic = "";
-          String host_payload;
-          root.printTo(host_payload);
-          callback(host_topic, host_payload);
-
-          if(!more){
-            break;
-          }
-        }
+        final->sendData(callback);
       } else {
         Serial.println("NULL");
         String host_topic = "";

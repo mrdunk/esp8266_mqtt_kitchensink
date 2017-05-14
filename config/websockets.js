@@ -169,22 +169,22 @@ function wsStart(){
 	};
 
   websocket.onmessage = function(evt) {
-    //console.log("websocket.onmessage");
     ws_data_timer = Date.now();
     var payload = parsePayload(evt.data, log);
     if(payload !== undefined){
       updatePage(payload);
       if(payload._command === "teach"){
+        console.log("websocket.onmessage", payload);
         wsDeQueue(payload);
 
         var path = payload.name.split(".");
         var container = ws_data;
         for(var i = 0; i < path.length -1; i++){
-          if(container[path[i]] === undefined){
-            if(payload.total === 0 || i < path.length -2){
-              container[path[i]] = {};
-            } else {
+          if(container[path[i]] === undefined || container[path[i]] === "_"){
+            if(payload.total > 0 && i >= path.length -2){
               container[path[i]] = [];
+            } else {
+              container[path[i]] = {};
             }
           }
           container = container[path[i]];

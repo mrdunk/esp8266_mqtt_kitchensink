@@ -78,23 +78,4 @@ var Parser =
     }
   },
 
-  /* Loop through tag data structure and request data from server. */
-  requestData : function(tag, parent_name=""){
-    if(parent_name === "root"){
-      parent_name = "";
-    } else {
-      parent_name += ".";
-    }
-    for(var i=0; i < tag.children.length; i++){
-      var child = tag.children[i];
-      var summary = {name: parent_name + child.name,
-                     type: child.type,
-                     _subject: "hosts/_all",
-                     _command: "learn"};
-      if(summary.type === "name"){
-        wsQueueSend(summary);
-      }
-      this.requestData(child, summary.name);
-    }
-  }
 }
