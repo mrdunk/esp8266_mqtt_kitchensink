@@ -60,6 +60,10 @@ class TagBase{
     return 0;
   }
 
+  virtual unsigned int contentCount(uint8_t /*index*/){
+    return contentCount();
+  }
+
   TagBase* matchPath(const String* name_list, uint8_t list_pointer=0) {
     if(strcmp(name, name_list[list_pointer].c_str()) == 0 || list_pointer >= MAX_TAG_RECURSION){
       return parent;
@@ -120,7 +124,7 @@ class TagBase{
         root["value"] = value;
         root["sequence"] = sequence;
         if(parent){
-          root["total"] = parent->contentCount();
+          root["total"] = parent->contentCount(sequence);
         }
 
         String host_topic = "";
@@ -343,7 +347,8 @@ class TagHostCoreFlashspeed : public TagBase{
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     value = 0;
-    content = ESP.getFlashChipSpeed();
+    content = ESP.getFlashChipSpeed() / 1000000;
+    content += "MHz";
     return false;
   }
 };
@@ -513,7 +518,7 @@ class TagHostNwGateway : public TagBase{
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     value = 0;
-    content = ip_to_string(WiFi.subnetMask());
+    content = ip_to_string(WiFi.gatewayIP());
     return false;
   }
 };
@@ -526,7 +531,7 @@ class TagHostNwSubnet : public TagBase{
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     value = 0;
-    content = ip_to_string(WiFi.gatewayIP());
+    content = ip_to_string(WiFi.subnetMask());
     return false;
   }
 };
@@ -582,9 +587,9 @@ class TagHostNwconfiguredSubnet : public TagBase{
 class TagHostNwconfigured : public TagBase{
  public:
   TagHostNwconfigured(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "nwconfigured"),
-                                    children{new TagHostNwAddress(COMMON_PERAMS),
-                                             new TagHostNwGateway(COMMON_PERAMS),
-                                             new TagHostNwSubnet(COMMON_PERAMS)} { }
+                                    children{new TagHostNwconfiguredAddress(COMMON_PERAMS),
+                                             new TagHostNwconfiguredGateway(COMMON_PERAMS),
+                                             new TagHostNwconfiguredSubnet(COMMON_PERAMS)} { }
   TagBase* children[3];
 };
 
@@ -639,6 +644,137 @@ class TagHostSsids : public TagBase{
   }
 };
 
+class TagHostMqttBrokerAddress : public TagBase{
+ public:
+  TagHostMqttBrokerAddress(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->brokerip;
+    content = ip_to_string(config->brokerip);
+    return false;
+  }
+};
+  
+class TagHostMqttBrokerPort : public TagBase{
+ public:
+  TagHostMqttBrokerPort(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "port"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->brokerport;
+    content = config->brokerport;
+    return false;
+  }
+};
+  
+class TagHostMqttBroker : public TagBase{
+ public:
+  TagHostMqttBroker(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "broker"),
+                                    children{new TagHostMqttBrokerAddress(COMMON_PERAMS),
+                                             new TagHostMqttBrokerPort(COMMON_PERAMS),
+                                    } { }
+  TagBase* children[2];
+};
+  
+class TagHostMqttSubscriptionprefix : public TagBase{
+ public:
+  TagHostMqttSubscriptionprefix(COMMON_DEF) : 
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subscribe_prefix"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = config->subscribeprefix;
+    return false;
+  }
+};
+  
+class TagHostMqttPublishprefix : public TagBase{
+ public:
+  TagHostMqttPublishprefix(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "publish_prefix"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = config->publishprefix;
+    return false;
+  }
+};
+  
+class TagHostMqtt : public TagBase{
+ public:
+  TagHostMqtt(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "mqtt"),
+                                    children{new TagHostMqttBroker(COMMON_PERAMS),
+                                             new TagHostMqttSubscriptionprefix(COMMON_PERAMS),
+                                             new TagHostMqttPublishprefix(COMMON_PERAMS),
+                                    } { }
+  TagBase* children[3];
+};
+  
+class TagHostHttpAddress : public TagBase{
+ public:
+  TagHostHttpAddress(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = config->firmwarehost;
+    return false;
+  }
+};
+  
+class TagHostHttpPort : public TagBase{
+ public:
+  TagHostHttpPort(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "port"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = config->firmwareport;
+    content = config->firmwareport;
+    return false;
+  }
+};
+  
+class TagHostHttpDirectory : public TagBase{
+ public:
+  TagHostHttpDirectory(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "directory"),
+                                    children{
+                                    } { }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = config->firmwaredirectory;
+    return false;
+  }
+};
+  
+class TagHostHttp : public TagBase{
+ public:
+  TagHostHttp(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "http"),
+                                    children{new TagHostHttpAddress(COMMON_PERAMS),
+                                             new TagHostHttpPort(COMMON_PERAMS),
+                                             new TagHostHttpDirectory(COMMON_PERAMS),
+                                    } { }
+  TagBase* children[3];
+};
+  
 class TagHost : public TagBase{
  public:
   TagHost(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host"),
@@ -650,8 +786,10 @@ class TagHost : public TagBase{
                                  new TagHostNw(COMMON_PERAMS),
                                  new TagHostNwconfigured(COMMON_PERAMS),
                                  new TagHostSsids(COMMON_PERAMS),
+                                 new TagHostMqtt(COMMON_PERAMS),
+                                 new TagHostHttp(COMMON_PERAMS),
                         } { }
-  TagBase* children[8];
+  TagBase* children[10];
 };
 
 class TagServersMqttActive : public TagBase{
@@ -1135,7 +1273,8 @@ class TagFsSpaceRatioused : public TagBase{
 
 class TagFsSpaceRatioremaining : public TagBase{
  public:
-  TagFsSpaceRatioremaining(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ratio_remaining"),
+  TagFsSpaceRatioremaining(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ratio_remaining"),
                         children{
                         } {}
   TagBase* children[0];
@@ -1178,6 +1317,70 @@ class TagFs : public TagBase{
   TagBase* children[2];
 };
 
+class TagUiIopinValue : public TagBase{
+ public:
+  TagUiIopinValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = values[index];
+    content = value;
+    return (index < 10);
+  }
+};
+
+class TagUiIopinSelected : public TagBase{
+ public:
+  TagUiIopinSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    if(strcmp(getParent()->getParent()->name, "ui") == 0){
+      value = (config->enableiopin == values[index]);
+    } else {
+    }
+    content = value;
+    return (index < 10);
+  }
+
+  unsigned int contentCount(uint8_t index){
+    if(strcmp(getParent()->getParent()->name, "ui") == 0){
+      return (config->enableiopin == values[index]);
+    }
+    return 0;
+  }
+};
+
+class TagUiIopin : public TagBase{
+ public:
+  TagUiIopin(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iopin"),
+                        children{new TagUiIopinValue(COMMON_PERAMS),
+                                 new TagUiIopinSelected(COMMON_PERAMS)
+                        } {}
+  TagBase* children[2];
+  
+  unsigned int contentCount(){
+    return 11;
+  }
+};
+
+class TagUi : public TagBase{
+ public:
+  TagUi(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ui"),
+                        children{new TagUiIopin(COMMON_PERAMS),
+                                 //new TagUiIotype(COMMON_PERAMS)
+                        } {}
+  TagBase* children[1];
+};
+
 class TagRoot : public TagBase{
  public:
   TagRoot(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "root"), 
@@ -1185,9 +1388,10 @@ class TagRoot : public TagBase{
                                  new TagSession(COMMON_PERAMS),
                                  new TagServers(COMMON_PERAMS),
                                  new TagMdns(COMMON_PERAMS),
-                                 new TagFs(COMMON_PERAMS)
+                                 new TagFs(COMMON_PERAMS),
+                                 new TagUi(COMMON_PERAMS)
                         } {}
-  TagBase* children[5];
+  TagBase* children[6];
 };
 
 

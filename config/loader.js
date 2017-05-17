@@ -137,7 +137,7 @@ var Loader =
       div.innerHTML = content;
       container.appendChild(div);
     } 
-    if(false){
+    if(true){
       for(var i=0; i < new_lines.length; i++){
         var text = document.createTextNode(new_lines[i]);
         container.appendChild(text);
@@ -221,10 +221,10 @@ var Loader =
         } else {
           grand_children = [true];
         }
-        var last;
+        var last = {};
         if(grand_children.length === 0){
           var next_child = children[i +1];  // "end" tag.
-          if(next_child !== undefined){
+          if(next_child !== undefined && next_child.line !== undefined && next_child.pos !== undefined){
             last.line = next_child.line;
             last.pos = next_child.pos;
           }

@@ -22,48 +22,48 @@
 			<dt>mac_address</dt>
       <dd>{{host.mac}}</dd>
 			<dt>hostname</dt>
-			<dd><input type="text" name="hostname" class="hostname" value="{{config.hostname}}"
+			<dd><input type="text" name="hostname" class="hostname" value="{{host.hostname}}"
            placeholder="hostname"><button type="button" name="save_hostname" 
            onclick="save('hostname')">Save</button>
 			</dd>
 			<dt>&nbsp</dt><dd>&nbsp</dd>
 			<dt>IP address</dt>
 			<dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" 
-					 name="ip" class="ip" value="{{config.ip}}" placeholder="{{config.ip}}">
+					 name="ip" class="ip" value="{{host.nwconfigured.address}}" placeholder="{{host.nwconfigured.address}}">
 				  <button type="button" name="save_ip" onclick="save('ip')">Save</button>
 					(0.0.0.0 for DHCP. Static boots quicker.)
 		  </dd>
       <dt>Subnet mask</dt>
       <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="subnet"
-           class="subnet" value="{{config.subnet}}" placeholder="{{config.subnet}}">
+           class="subnet" value="{{host.nwconfigured.subnet}}" placeholder="{{host.nwconfigured.subnet}}">
           <button type="button" name="save_subnet" onclick="save('subnet')">Save</button>
       </dd>
       <dt>Gateway</dt>
       <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="gateway" 
-           class="gateway" value="{{config.gateway}}" placeholder="{{config.gateway}}">
+           class="gateway" value="{{host.nwconfigured.gateway}}" placeholder="{{host.nwconfigured.gateway}}">
           <button type="button" name="save_gateway" onclick="save('gateway')">Save</button>
       </dd>
       <dt>&nbsp</dt> <dd>&nbsp</dd>
       <dt>Static MQTT broker ip</dt>
       <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="brokerip" 
-           class="brokerip" value="{{config.brokerip}}" placeholder="{{config.brokerip}}">
+           class="brokerip" value="{{host.mqtt.broker.address}}" placeholder="{{host.mqtt.broker.address}}">
           <button type="button" name="save_brokerip" onclick="save('brokerip')">Save
           </button>(0.0.0.0 to use mDNS auto discovery)
       </dd>
       <dt>Static MQTT broker port</dt>
-      <dd><input type="number" class="brokerport" value="{{config.brokerport}}"></input>
+      <dd><input type="number" class="brokerport" value="{{host.mqtt.broker.port}}"></input>
           <button type="button" name="save_brokerport" onclick="save('brokerport')">Save</button>
       </dd>
       <dt>MQTT subscription prefix</dt>
       <dd><input type="text" name="subscribeprefix" class="subscribeprefix" 
-           value="{{config.subscribeprefix}}" placeholder="some/subscribe/prefix/+">
+           value="{{host.mqtt.subscribe_prefix}}" placeholder="some/subscribe/prefix/+">
           <button type="button" name="save_subscribeprefix" onclick="save('subscribeprefix')">
             Save
           </button>
       </dd>
       <dt>MQTT publish prefix</dt>
       <dd><input type="text" name="publishprefix" class="publishprefix"
-           value="{{config.publishprefix}}" placeholder="some/publish/prefix">
+           value="{{host.mqtt.publish_prefix}}" placeholder="some/publish/prefix">
           <button type="button" name="save_publishprefix" onclick="save('publishprefix')">
             Save
           </button>
@@ -71,20 +71,20 @@
       <dt>&nbsp</dt> <dd>&nbsp</dd>
       <dt>HTTP Firmware host</dt>
       <dd><input type="text" name="firmwarehost" class="firmwarehost"
-           value="{{config.firmwarehost}}" placeholder="http://your.firmware.host">
+           value="{{host.http.address}}" placeholder="http://your.firmware.host">
           <button type="button" name="save_firmwarehost" onclick="save('firmwarehost')">
             Save
           </button>
       </dd>
       <dt>HTTP Firmware directory</dt>
       <dd><input type="text" name="firmwaredirectory" class="firmwaredirectory"
-           value="{{config.firmwaredirectory}}" placeholder="/some/directory/on/firmwarehost">
+           value="{{host.http.directory}}" placeholder="/some/directory/on/firmwarehost">
           <button type="button" name="save_firmwaredirectory" onclick="save('firmwaredirectory')">
             Save
           </button>
       </dd>
       <dt>HTTP Firmware port</dt>
-      <dd><input type="number" class="firmwareport" value="{{config.firmwareport}}"></input>
+      <dd><input type="number" class="firmwareport" value="{{host.http.port}}"></input>
           <button type="button" name="save_firmwareport" onclick="save('firmwareport')">
             Save
           </button>
@@ -99,11 +99,11 @@
       <dt>Config enable IO pin</dt>
       <dd>
         <select class="enableiopin">
-          {{#iopin}}
+          {{#ui.iopin}}
           <option value="{{value}}" {{#selected}}selected{{/selected}}>
             {{value}}
           </option>
-          {{/iopin}}
+          {{/ui.iopin}}
         </select>
       </dd>
       <table>
