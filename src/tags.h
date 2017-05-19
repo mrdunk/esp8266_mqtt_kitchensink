@@ -60,10 +60,6 @@ class TagBase{
     return 0;
   }
 
-  virtual unsigned int contentCount(uint8_t /*index*/){
-    return contentCount();
-  }
-
   TagBase* matchPath(const String* name_list, uint8_t list_pointer=0) {
     if(strcmp(name, name_list[list_pointer].c_str()) == 0 || list_pointer >= MAX_TAG_RECURSION){
       return parent;
@@ -88,9 +84,12 @@ class TagBase{
   String getPath(){
     String path = name;
     TagBase* p = parent;
-    while(p && strcmp(p->name, "root") != 0){
-      path = String(p->name) + "." + path;
-      p = p->parent;
+    if(p && strcmp(p->name, "root") != 0){
+      if(p->contentCount() > 0){
+        path = "." + path;
+        path = sequence + path;
+      };
+      path = p->getPath() + "." + path;
     }
 
     return path;
@@ -105,7 +104,7 @@ class TagBase{
     String content;
     int value;
     bool more = true;
-    uint8_t sequence = 0;
+    sequence = 0;
 
     while(more){
       {
@@ -124,7 +123,7 @@ class TagBase{
         root["value"] = value;
         root["sequence"] = sequence;
         if(parent){
-          root["total"] = parent->contentCount(sequence);
+          root["total"] = parent->contentCount();
         }
 
         String host_topic = "";
@@ -160,6 +159,7 @@ class TagBase{
  public:
   const uint8_t children_len;
   const char* name;
+  uint8_t sequence;
 };
 
 class TagSessionValid : public TagBase{
@@ -1343,17 +1343,28 @@ class TagUiIopinSelected : public TagBase{
   int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
 
   bool contentsAt(uint8_t index, String& content, int& value){
-    if(strcmp(getParent()->getParent()->name, "ui") == 0){
+    value = 0;
+    content = "un-set";
+
+    if(strcmp(getParent()->getParent()->getParent()->name, "root") == 0){
       value = (config->enableiopin == values[index]);
-    } else {
+      content = value;
+    } else if(strcmp(getParent()->getParent()->getParent()->name, "io") == 0){
+      value = 0;
+      for(int i = 0; i < MAX_DEVICES && value < getParent()->getParent()->sequence; ++i) {
+        if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+          value++;
+        }
+      }
+      content = (config->devices[value].iopin == values[index]);
     }
-    content = value;
+
     return (index < 10);
   }
 
-  unsigned int contentCount(uint8_t index){
+  unsigned int contentCount(){
     if(strcmp(getParent()->getParent()->name, "ui") == 0){
-      return (config->enableiopin == values[index]);
+      return (config->enableiopin == values[sequence]);
     }
     return 0;
   }
@@ -1379,6 +1390,70 @@ class TagUi : public TagBase{
                                  //new TagUiIotype(COMMON_PERAMS)
                         } {}
   TagBase* children[1];
+  
+  bool contentsAt(uint8_t index, String& /*content*/, int& /*value*/){
+    return (index +1 < getParent()->contentCount());
+  }
+};
+
+class TagIoIndex : public TagBase{
+ public:
+  TagIoIndex(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "index"),
+                        children{
+                        } {}
+
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        value++;
+      }
+    }
+    content = value;
+    return (bool)(getParent()->contentCount() - index -1);
+  }
+};
+
+class TagIoTopic : public TagBase{
+ public:
+  TagIoTopic(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "topic"),
+                        children{
+                        } {}
+
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        value++;
+      }
+    }
+    content = DeviceAddress(config->devices[value]);
+    return (bool)(getParent()->contentCount() - index -1);
+  }
+};
+
+class TagIo : public TagBase{
+ public:
+  TagIo(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "io"),
+                        children{new TagIoIndex(COMMON_PERAMS),
+                                 new TagIoTopic(COMMON_PERAMS),
+                                 new TagUi(COMMON_PERAMS)
+                        } {}
+  TagBase* children[3];
+
+  unsigned int contentCount(){
+    uint8_t count = 0;
+    for(int i = 0; i < MAX_DEVICES; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        count ++;
+      }
+    }
+    return count;
+  }
 };
 
 class TagRoot : public TagBase{
@@ -1389,9 +1464,10 @@ class TagRoot : public TagBase{
                                  new TagServers(COMMON_PERAMS),
                                  new TagMdns(COMMON_PERAMS),
                                  new TagFs(COMMON_PERAMS),
-                                 new TagUi(COMMON_PERAMS)
+                                 new TagUi(COMMON_PERAMS),
+                                 new TagIo(COMMON_PERAMS)
                         } {}
-  TagBase* children[6];
+  TagBase* children[7];
 };
 
 

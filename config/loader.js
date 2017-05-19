@@ -179,13 +179,13 @@ var Loader =
   contentChunk: function(children, last_line, last_pos, lines, new_lines,
                          parent_path, final_line, final_pos, index){
     if(index === undefined){
-      index = 0;
+      index = [];
     }
     for(var i=0; i < children.length; i++){
       var child = children[i];
 
       path = this.getFullPath(parent_path, child.name);
-      console.log(i, parent_path, child.name.split("."), path);
+      console.log(i, parent_path, child.name.split("."), path, child.type);
 
       var this_line = child.line;
       for(var l = last_line; l < this_line; l++){
@@ -205,7 +205,6 @@ var Loader =
       new_lines[new_lines.length -1] += lines[this_line].substring(last_pos, child.pos);
       last_pos = child.pos + child.name.length;
       if(child.type === "name"){
-        //console.log(child);
         new_lines[new_lines.length -1] += this.tagContent(path, index);
         // "name" tag is 4 bytes long: {{XXX}}
         last_pos += 4;
@@ -224,7 +223,9 @@ var Loader =
         var last = {};
         if(grand_children.length === 0){
           var next_child = children[i +1];  // "end" tag.
-          if(next_child !== undefined && next_child.line !== undefined && next_child.pos !== undefined){
+          if(next_child !== undefined && next_child.line !== undefined &&
+              next_child.pos !== undefined)
+          {
             last.line = next_child.line;
             last.pos = next_child.pos;
           }
@@ -238,7 +239,7 @@ var Loader =
 
           path = parent_path.concat(child.name.split("."));
           last = this.contentChunk(child.children, child_last_line, child_last_pos,
-              lines, new_lines, path, closing_tag.line, closing_tag.pos, c);
+              lines, new_lines, path, closing_tag.line, closing_tag.pos, index.concat(c));
           child_last_line = last.line;
           child_last_pos = last.pos;
 
@@ -262,7 +263,7 @@ var Loader =
 
           path = parent_path.concat(child.name.split("."));
           last = this.contentChunk(child.children, child_last_line, child_last_pos,
-              lines, new_lines, path, closing_tag.line, closing_tag.pos, 0);
+              lines, new_lines, path, closing_tag.line, closing_tag.pos, index.concat(0));
 
           new_lines.push("");
 
@@ -300,9 +301,11 @@ var Loader =
 
   tagContent: function(path, index){
     var data_pointer = ws_data;
+    var index_pointer = 0;
     for(var i=0; i < path.length; i++){
       if(data_pointer instanceof Array){
-        data_pointer = data_pointer[index];
+        data_pointer = data_pointer[index[index_pointer]];
+        index_pointer++;
       }
       if(data_pointer === undefined || data_pointer[path[i]] === undefined){
         return "(XXXX)";
@@ -311,8 +314,6 @@ var Loader =
       }
     }
     return data_pointer;
-
-
   },
 
   /* Request data from server. */

@@ -117,30 +117,30 @@
           <th></th>
           <th></th>
         </tr>
-        {{#io.entry}}
+        {{#io}}
         <tr class="device_{{index}}">
           <td>{{index}}</td>
           <td>
-            {{config.subscribeprefix}}
+            {{host.mqtt.subscribe_prefix}}
             <input type="text" name="topic_{{index}}" class="device_{{index}}_topic" 
              value="{{topic}}" placeholder="some/topic">
           </td>
           <td>
             <select class="device_{{index}}_iotype">
-              {{#iotype}}
+              {{#ui.iotype}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
               </option>
-              {{/iotype}}
+              {{/ui.iotype}}
             </select>
           </td>
           <td>
             <select class="device_{{index}}_iopin">
-              {{#iopin}}
+              {{#ui.iopin}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
               </option>
-              {{/iopin}}
+              {{/ui.iopin}}
             </select>
           </td>
           <td>
@@ -162,7 +162,7 @@
             </button>
           </td>
         </tr>
-        {{/io.entry}}
+        {{/io}}
       </table>
     </dl>
   </body>

@@ -181,28 +181,16 @@ function wsStart(){
         var container = ws_data;
         for(var i = 0; i < path.length -1; i++){
           if(container[path[i]] === undefined || container[path[i]] === "_"){
-            if(payload.total > 0 && i >= path.length -2){
+            container[path[i]] = {};
+            if(i < path.length -2 && parseInt(path[i +1], 10).toString() === path[i +1]){
               container[path[i]] = [];
-            } else {
-              container[path[i]] = {};
             }
           }
           container = container[path[i]];
         }
 
         var last = path[path.length -1];
-
-        if(payload.total === 0){
-          container[last] = payload.content;
-        } else {
-          if(container[payload.sequence] === undefined){
-            container[payload.sequence] = {};
-          }
-          if(container[payload.sequence][last] === undefined){
-            container[payload.sequence][last] = {};
-          }
-          container[payload.sequence][last] = payload.content;
-        }
+        container[last] = payload.content;
 
         localStorage.esp8266_kitchensink = JSON.stringify(ws_data);
 
