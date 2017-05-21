@@ -34,8 +34,8 @@
 #include "mdns_actions.h"
 
 
-#define MAX_TAG_RECURSION 6
 
+#define MAX_TAG_RECURSION 6
 
 #define COMMON_DEF Config* _config, MdnsLookup* _brokers, mdns::MDns* _mdns, Mqtt* _mqtt, Io* _io
 
@@ -56,7 +56,7 @@ class TagBase{
     return false;
   }
 
-  virtual unsigned int contentCount(){
+  virtual uint8_t contentCount(){
     return 0;
   }
 
@@ -96,10 +96,10 @@ class TagBase{
   }
     
   void sendData(std::function< void(String&, String&) > callback, bool include_children=false){
-    Serial.print("sendData() ");
-    Serial.print(name);
-    Serial.print(" ");
-    Serial.println(getPath());
+    //Serial.print("sendData() ");
+    //Serial.print(name);
+    //Serial.print(" ");
+    //Serial.println(getPath());
 
     String content;
     int value;
@@ -130,16 +130,13 @@ class TagBase{
         String host_payload = "";
         root.printTo(host_payload);
 
-        Serial.println(host_payload);
+        //Serial.println(host_payload);
 
         callback(host_topic, host_payload);
       }
 
       for(uint8_t child = 0; include_children && child < children_len; child++){
         wdt_reset();
-
-        Serial.println(child);
-
         base_children[child]->parent = this;
         base_children[child]->sendData(callback, true);
       }
@@ -182,7 +179,7 @@ class TagSessionValid : public TagBase{
     return false;
   }
 
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     const unsigned int now = millis() / 1000;
     const int remaining = config->session_time + SESSION_TIMEOUT - now;
     if(config->sessionValid() && remaining > 0){
@@ -631,7 +628,7 @@ class TagHostSsids : public TagBase{
                                              new TagHostSsidsSignal(COMMON_PERAMS)} { }
   TagBase* children[2];
   
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     static const uint8_t UPDATE_EVERY = 30;  // seconds.
     uint32_t now = millis() / 1000;
     static uint32_t last_updated = 0;
@@ -968,7 +965,7 @@ class TagServersMqtt : public TagBase{
                         } {}
   TagBase* children[10];
   
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     Host* p_host;
     bool active;
     uint8_t count = 0;
@@ -1136,7 +1133,7 @@ class TagFsFilesIsmustache : public TagBase{
     return return_val;
   }
 
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     String content;
     int value;
     parent->contentsAt(0, content, value);
@@ -1153,7 +1150,7 @@ class TagFsFiles : public TagBase{
                         } {}
   TagBase* children[3];
   
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     int8_t file_count = 0;
     if(config->files == "0"){
       if(!SPIFFS.begin()){
@@ -1361,13 +1358,6 @@ class TagUiIopinSelected : public TagBase{
 
     return (index < 10);
   }
-
-  unsigned int contentCount(){
-    if(strcmp(getParent()->getParent()->name, "ui") == 0){
-      return (config->enableiopin == values[sequence]);
-    }
-    return 0;
-  }
 };
 
 class TagUiIopin : public TagBase{
@@ -1378,7 +1368,7 @@ class TagUiIopin : public TagBase{
                         } {}
   TagBase* children[2];
   
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     return 11;
   }
 };
@@ -1392,7 +1382,7 @@ class TagUi : public TagBase{
   TagBase* children[1];
   
   bool contentsAt(uint8_t index, String& /*content*/, int& /*value*/){
-    return (index +1 < getParent()->contentCount());
+    return ((index +1) < getParent()->contentCount());
   }
 };
 
@@ -1445,7 +1435,7 @@ class TagIo : public TagBase{
                         } {}
   TagBase* children[3];
 
-  unsigned int contentCount(){
+  uint8_t contentCount(){
     uint8_t count = 0;
     for(int i = 0; i < MAX_DEVICES; ++i) {
       if(strlen(config->devices[i].address_segment[0].segment) > 0) {
@@ -1470,5 +1460,76 @@ class TagRoot : public TagBase{
   TagBase* children[7];
 };
 
+
+class TagItterator{
+ public: 
+  TagItterator(TagRoot& tagRoot) {
+    tag[0] = &tagRoot;
+    reset();
+  }
+
+  void reset(){
+    counter = -1;
+    depth = 0;
+    for(uint8_t i = 1; i < MAX_TAG_RECURSION; i++){
+      tag[i] = nullptr;
+    }
+  }
+
+  //void Queueloop(std::function< void(String&, String&) > callback){
+  //}
+
+  TagBase* getSibling(TagBase* parent, TagBase* child){
+    if(child == nullptr){
+      return parent->getChild(0);
+    }
+    for(uint8_t sibling = 0; sibling < parent->children_len -1; sibling++){
+      if(parent->getChild(sibling) == child){
+        return parent->getChild(sibling +1);
+      }
+    }
+    return nullptr;
+  }
+
+  TagBase* loop(){
+    int8_t depth;
+    for(depth = 0; depth < MAX_TAG_RECURSION; depth++){
+      if(tag[depth] == nullptr){
+        depth--;
+        break;
+      }
+    }
+
+    for(uint8_t i = 0; i < depth; i++){ Serial.print("  ");}
+    Serial.print(depth);
+    Serial.print(" ");
+    Serial.println(tag[depth]->name);
+
+    TagBase* return_tag;
+
+    if(tag[depth]->children_len > 0){
+      return_tag = tag[depth];
+      tag[depth +1] = tag[depth]->getChild(0);
+    } else {
+      return_tag = tag[depth];
+      tag[depth] = getSibling(tag[depth -1], tag[depth]);
+      for(uint8_t p = depth; p; p--){
+        if(tag[p] == nullptr){
+          if(p < 2){
+            return nullptr;
+          }
+          tag[p -1] = getSibling(tag[p -2], tag[p -1]);
+        }
+      }
+    }
+
+    return return_tag;
+  }
+
+ private:
+  int16_t counter;
+  TagBase* tag[MAX_TAG_RECURSION];
+  std::function< void(String&, String&) > callback;
+};
 
 #endif  // ESP8266__TAGS_H

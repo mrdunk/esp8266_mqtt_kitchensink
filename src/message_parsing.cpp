@@ -205,6 +205,13 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       callback(host_topic, host_payload);
     } else if(command == "learn_all"){
       root_tag.sendData(callback, true);
+      TagItterator tag_itterator(root_tag);
+      TagBase* tag;
+      while(tag = tag_itterator.loop()){
+        //Serial.print(" * ");
+        //Serial.println(tag->name);
+      }
+
     } else if(command == "learn"){
       Serial.println(payload);
       String name_list[MAX_TAG_RECURSION];
