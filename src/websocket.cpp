@@ -44,8 +44,11 @@ void WebSocket::parseIncoming(uint8_t num, uint8_t * payload, size_t length) {
   if(sequence != ""){
     websocket.sendTXT(num, ". : {\"_ack\":\"" + sequence + "\"}");
   } else {
-    auto sendTXT_callback = 
-      [&](String& t, String& p) {websocket.sendTXT(num, t + " : " + p);};
+    std::function< void(String&, String&) > sendTXT_callback = 
+      [&, num](String& t, String& p) {
+                                 //websocket.broadcastTXT(t + " : " + p);
+                                 websocket.sendTXT(num, t + " : " + p);
+                                };
     actOnMessage(io, config, topic, (char*)payload, sendTXT_callback);
   }
 }

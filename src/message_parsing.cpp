@@ -24,6 +24,8 @@
 #include "ipv4_helpers.h"
 
 extern TagRoot root_tag;
+extern TagItterator tag_itterator;
+extern std::function< void(String&, String&) > tag_itterator_callback;
 
 void parse_tag_name(String& tag_name, String* name_list){
   uint8_t section_count = 0;
@@ -204,15 +206,15 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       toAnnounceHost(config, host_topic, host_payload);
       callback(host_topic, host_payload);
     } else if(command == "learn_all"){
+      Serial.println("----------------learn_all-----------");
       //root_tag.sendDataRecursive(callback);
 
-      TagItterator tag_itterator(root_tag);
-      TagBase* tag;
-      while((tag = tag_itterator.loop())){
-        //Serial.print(" * ");
-        //Serial.println(tag->name);
-        tag->sendData(tag->sequence, callback);
-      }
+      tag_itterator.reset();
+      tag_itterator_callback = callback;
+      //TagBase* tag;
+      //while((tag = tag_itterator.loop())){
+      //  tag->sendData(callback);
+      //}
 
     } else if(command == "learn"){
     }

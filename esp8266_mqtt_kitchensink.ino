@@ -89,6 +89,8 @@ Io io;
 // TagRoot's children can service requests for system data. Used in response
 // to network requests for specific data.
 TagRoot root_tag(&config, &brokers, &my_mdns, &mqtt, &io);
+TagItterator tag_itterator(root_tag);
+std::function< void(String&, String&) > tag_itterator_callback = nullptr;
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
@@ -283,6 +285,11 @@ void loop(void) {
     while(io.getOutput(topic, payload)){
       webSocket.publish(topic, payload);
       mqtt.publish(topic, payload);
+    }
+
+    TagBase* tag = tag_itterator.loop();
+    if(tag != nullptr){
+      tag->sendData(tag_itterator_callback);
     }
   }
 }

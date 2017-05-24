@@ -96,9 +96,7 @@ class TagBase{
     return path;
   }
     
-  bool sendData(uint8_t sequence_, std::function< void(String&, String&) > callback){
-    //sequence = sequence_;
-
+  bool sendData(std::function< void(String&, String&) > callback){
     String content;
     int value;
     //DynamicJsonBuffer jsonBuffer;
@@ -107,7 +105,7 @@ class TagBase{
     root["name"] = getPath();
     root["_command"] = "teach";
 
-    bool return_val = contentsAt(sequence_, content, value);
+    bool return_val = contentsAt(sequence, content, value);
 
     if(content == "" && (parent == nullptr || parent->contentCount() == 0)){
       return true;
@@ -145,7 +143,7 @@ class TagBase{
     sequence = 0;
 
     while(more){
-      more = sendData(sequence, callback);
+      more = sendData(callback);
 
       for(uint8_t child = 0; child < children_len; child++){
         wdt_reset();
@@ -1478,18 +1476,17 @@ class TagItterator{
   TagItterator(TagRoot& tagRoot) {
     tag[0] = &tagRoot;
     reset();
+    last_loop = true;
   }
 
   void reset(){
     count[0] = 0;
+    last_loop = false;
     for(uint8_t i = 1; i < MAX_TAG_RECURSION; i++){
       tag[i] = nullptr;
       count[i] = 0;
     }
   }
-
-  //void Queueloop(std::function< void(String&, String&) > callback){
-  //}
 
   TagBase* getSibling(TagBase* parent, TagBase* child){
     if(child == nullptr){
@@ -1504,9 +1501,7 @@ class TagItterator{
   }
 
   TagBase* loop(){
-    static bool last_loop = false;
     if(last_loop){
-      last_loop = false;
       return nullptr;
     }
 
@@ -1561,6 +1556,7 @@ class TagItterator{
   TagBase* tag[MAX_TAG_RECURSION];
   int8_t count[MAX_TAG_RECURSION];
   std::function< void(String&, String&) > callback;
+  bool last_loop;
 };
 
 #endif  // ESP8266__TAGS_H
