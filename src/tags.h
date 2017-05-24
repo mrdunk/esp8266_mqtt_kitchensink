@@ -74,6 +74,7 @@ class TagBase{
     if(index > children_len){
       return nullptr;
     }
+    base_children[index]->parent = this;
     return base_children[index];
   }
 
@@ -95,50 +96,61 @@ class TagBase{
     return path;
   }
     
-  void sendData(std::function< void(String&, String&) > callback, bool include_children=false){
+  bool sendData(uint8_t sequence_, std::function< void(String&, String&) > callback){
+    //sequence = sequence_;
+
+    String content;
+    int value;
+    //DynamicJsonBuffer jsonBuffer;
+    StaticJsonBuffer<200> jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    root["name"] = getPath();
+    root["_command"] = "teach";
+
+    bool return_val = contentsAt(sequence_, content, value);
+
+    if(content == "" && (parent == nullptr || parent->contentCount() == 0)){
+      return true;
+    }
+
+    if(content == ""){
+      content = "_";
+    }
+
+    root["content"] = content;
+    root["value"] = value;
+    root["sequence"] = sequence;
+    if(parent){
+      root["total"] = parent->contentCount();
+    }
+
+    String host_topic = "";
+    String host_payload = "";
+    root.printTo(host_payload);
+
+    //Serial.println(host_payload);
+
+    callback(host_topic, host_payload);
+
+    return return_val;
+  }
+
+  void sendDataRecursive(std::function< void(String&, String&) > callback){
     //Serial.print("sendData() ");
     //Serial.print(name);
     //Serial.print(" ");
     //Serial.println(getPath());
 
-    String content;
-    int value;
     bool more = true;
     sequence = 0;
 
     while(more){
-      {
-        StaticJsonBuffer<200> jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
-        root["name"] = getPath();
-        root["_command"] = "teach";
+      more = sendData(sequence, callback);
 
-        more = contentsAt(sequence, content, value);
-
-        if(content == ""){
-          content = "_";
-        }
-
-        root["content"] = content;
-        root["value"] = value;
-        root["sequence"] = sequence;
-        if(parent){
-          root["total"] = parent->contentCount();
-        }
-
-        String host_topic = "";
-        String host_payload = "";
-        root.printTo(host_payload);
-
-        //Serial.println(host_payload);
-
-        callback(host_topic, host_payload);
-      }
-
-      for(uint8_t child = 0; include_children && child < children_len; child++){
+      for(uint8_t child = 0; child < children_len; child++){
         wdt_reset();
         base_children[child]->parent = this;
-        base_children[child]->sendData(callback, true);
+        base_children[child]->sendDataRecursive(callback);
       }
 
       sequence++;
@@ -1469,10 +1481,10 @@ class TagItterator{
   }
 
   void reset(){
-    counter = -1;
-    depth = 0;
+    count[0] = 0;
     for(uint8_t i = 1; i < MAX_TAG_RECURSION; i++){
       tag[i] = nullptr;
+      count[i] = 0;
     }
   }
 
@@ -1492,6 +1504,12 @@ class TagItterator{
   }
 
   TagBase* loop(){
+    static bool last_loop = false;
+    if(last_loop){
+      last_loop = false;
+      return nullptr;
+    }
+
     int8_t depth;
     for(depth = 0; depth < MAX_TAG_RECURSION; depth++){
       if(tag[depth] == nullptr){
@@ -1500,26 +1518,39 @@ class TagItterator{
       }
     }
 
-    for(uint8_t i = 0; i < depth; i++){ Serial.print("  ");}
-    Serial.print(depth);
-    Serial.print(" ");
-    Serial.println(tag[depth]->name);
+    TagBase* return_tag = tag[depth];
+    return_tag->sequence = count[depth -1];
 
-    TagBase* return_tag;
+    Serial.print(depth);
+    for(uint8_t i = 0; i < depth; i++){ Serial.print("  ");}
+    Serial.print(" ");
+    Serial.print(tag[depth]->name);
+    //Serial.print("\t\t");
+    //Serial.print(tag[depth]->contentCount());
+    Serial.print("\t");
+    Serial.println(tag[depth]->sequence);
+    //Serial.println(tag[depth]->getPath());
 
     if(tag[depth]->children_len > 0){
-      return_tag = tag[depth];
       tag[depth +1] = tag[depth]->getChild(0);
+      count[depth +1] = 0;
     } else {
-      return_tag = tag[depth];
-      tag[depth] = getSibling(tag[depth -1], tag[depth]);
-      for(uint8_t p = depth; p; p--){
-        if(tag[p] == nullptr){
-          if(p < 2){
-            return nullptr;
-          }
-          tag[p -1] = getSibling(tag[p -2], tag[p -1]);
+      uint8_t d = depth +1;
+      while(tag[d] == nullptr){
+        d--;
+        
+        if(d == 0){
+          last_loop = true;
+          break;
         }
+          
+        count[d]++;
+        if(count[d] < tag[d]->contentCount()){
+          break;
+        }
+        count[d] = 0;
+        
+        tag[d] = getSibling(tag[d -1], tag[d]);
       }
     }
 
@@ -1527,8 +1558,8 @@ class TagItterator{
   }
 
  private:
-  int16_t counter;
   TagBase* tag[MAX_TAG_RECURSION];
+  int8_t count[MAX_TAG_RECURSION];
   std::function< void(String&, String&) > callback;
 };
 

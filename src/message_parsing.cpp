@@ -204,39 +204,17 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       toAnnounceHost(config, host_topic, host_payload);
       callback(host_topic, host_payload);
     } else if(command == "learn_all"){
-      root_tag.sendData(callback, true);
+      //root_tag.sendDataRecursive(callback);
+
       TagItterator tag_itterator(root_tag);
       TagBase* tag;
-      while(tag = tag_itterator.loop()){
+      while((tag = tag_itterator.loop())){
         //Serial.print(" * ");
         //Serial.println(tag->name);
+        tag->sendData(tag->sequence, callback);
       }
 
     } else if(command == "learn"){
-      Serial.println(payload);
-      String name_list[MAX_TAG_RECURSION];
-      String tag_name = valueFromStringPayload(payload, "name");
-      parse_tag_name(tag_name, name_list);
-
-      TagBase* final = root_tag.matchPath(name_list); 
-      Serial.print("Final: ");
-      if(final){
-        TagBase* p = final;
-        while(p){
-          Serial.print(p->name);
-          Serial.print(" ");
-          p = p->getParent();
-        }
-        Serial.println();
-
-        final->sendData(callback);
-      } else {
-        Serial.println("NULL");
-        String host_topic = "";
-        String host_payload =
-          "{\"state\":\"missing\", \"name\":\"" + tag_name + "\",\"_command\":\"teach\"}";
-        callback(host_topic, host_payload);
-      }
     }
   }
 
