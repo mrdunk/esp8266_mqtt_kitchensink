@@ -191,6 +191,7 @@ function wsStart(){
 
         var last = path[path.length -1];
         container[last] = payload.content;
+        container[last + "_path"] = payload.name;
 
         localStorage.esp8266_kitchensink = JSON.stringify(ws_data);
 

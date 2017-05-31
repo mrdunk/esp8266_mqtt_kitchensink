@@ -10,7 +10,8 @@ var Loader =
     var context = this;
     window.onhashchange = function(){console.log("hash change");
                                      context.hashChange();
-                                     context.insertContent()};
+                                     context.insertContent(),
+                                     context.watchFormChanges()};
     this.requestData();
     this.loadFile(this.selected_file);
     this.loadFilenames();
@@ -157,7 +158,8 @@ var Loader =
         if(pointer === undefined){
           return false;
         }
-        pointer = pointer[path[i]];
+        var p = path[i].split('_')[0];
+        pointer = pointer[p];
         if(pointer === undefined){
           return false;
         }
@@ -302,12 +304,20 @@ var Loader =
   tagContent: function(path, index){
     var data_pointer = ws_data;
     var index_pointer = 0;
+    var exact_path = '';
     for(var i=0; i < path.length; i++){
       if(data_pointer instanceof Array){
         data_pointer = data_pointer[index[index_pointer]];
+        exact_path += index[index_pointer];
+        exact_path += '.';
         index_pointer++;
       }
+      exact_path += path[i];
+      exact_path += '.';
       if(data_pointer === undefined || data_pointer[path[i]] === undefined){
+        if(exact_path.endsWith('_path.')){
+          return exact_path.split('_path.')[0];
+        }
         return "(XXXX)";
       } else {
         data_pointer = data_pointer[path[i]];
@@ -321,6 +331,28 @@ var Loader =
     var summary = {_subject: "hosts/_all",
                    _command: "learn_all"};
     wsQueueSend(summary);
+  },
+
+  watchFormChanges : function(){
+    var elements = document.getElementsByClassName("monitor_changes");
+    console.log(elements);
+  },
+
+  saveChanges : function(){
+    var elements = document.getElementsByClassName("monitor_changes");
+    for(var i = 0; i < elements.length; i++){
+      var name = elements[i].name;
+      if(name === undefined || name === ''){
+        for(var c = 0; c < elements[i].classList.length; c++){
+          if(elements[i].classList[c] !== 'monitor_changes'){
+            name = elements[i].classList[c];
+            break;
+          }
+        }
+      }
+      console.log(name, elements[i].value);
+      elements[i].onchange=function(){console.log("test");};
+    }
   }
 
 };

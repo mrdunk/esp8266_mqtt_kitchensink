@@ -206,16 +206,8 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       toAnnounceHost(config, host_topic, host_payload);
       callback(host_topic, host_payload);
     } else if(command == "learn_all"){
-      Serial.println("----------------learn_all-----------");
-      //root_tag.sendDataRecursive(callback);
-
       tag_itterator.reset();
       tag_itterator_callback = callback;
-      //TagBase* tag;
-      //while((tag = tag_itterator.loop())){
-      //  tag->sendData(callback);
-      //}
-
     } else if(command == "learn"){
     }
   }

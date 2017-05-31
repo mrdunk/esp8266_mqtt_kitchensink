@@ -20,85 +20,60 @@
 
     <dl>
 			<dt>mac_address</dt>
-      <dd>{{host.mac}}</dd>
+      <dd class="monitor_changes {{host.mac_path}}">{{host.mac}}</dd>
 			<dt>hostname</dt>
-			<dd><input type="text" name="hostname" class="hostname" value="{{host.hostname}}"
-           placeholder="hostname"><button type="button" name="save_hostname" 
-           onclick="save('hostname')">Save</button>
+			<dd><input type="text" name="{{host.hostname_path}}" class="monitor_changes {{host.hostname_path}}" value="{{host.hostname}}" placeholder="hostname">
 			</dd>
 			<dt>&nbsp</dt><dd>&nbsp</dd>
 			<dt>IP address</dt>
 			<dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" 
-					 name="ip" class="ip" value="{{host.nwconfigured.address}}" placeholder="{{host.nwconfigured.address}}">
-				  <button type="button" name="save_ip" onclick="save('ip')">Save</button>
+					 name="{{host.nwconfigured.address_path}}" class="monitor_changes {{host.nwconfigured.address_path}}" value="{{host.nwconfigured.address}}" placeholder="{{host.nwconfigured.address}}">
 					(0.0.0.0 for DHCP. Static boots quicker.)
 		  </dd>
       <dt>Subnet mask</dt>
-      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="subnet"
-           class="subnet" value="{{host.nwconfigured.subnet}}" placeholder="{{host.nwconfigured.subnet}}">
-          <button type="button" name="save_subnet" onclick="save('subnet')">Save</button>
+      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="{{host.nwconfigured.subnet_path}}"
+           class="monitor_changes {{host.nwconfigured.subnet_path}}" value="{{host.nwconfigured.subnet}}" placeholder="{{host.nwconfigured.subnet}}">
       </dd>
       <dt>Gateway</dt>
-      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="gateway" 
-           class="gateway" value="{{host.nwconfigured.gateway}}" placeholder="{{host.nwconfigured.gateway}}">
-          <button type="button" name="save_gateway" onclick="save('gateway')">Save</button>
+      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="{{host.nwconfigured.gateway_path}}" 
+           class="monitor_changes {{host.nwconfigured.gateway_path}}" value="{{host.nwconfigured.gateway}}" placeholder="{{host.nwconfigured.gateway}}">
       </dd>
       <dt>&nbsp</dt> <dd>&nbsp</dd>
       <dt>Static MQTT broker ip</dt>
-      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="brokerip" 
-           class="brokerip" value="{{host.mqtt.broker.address}}" placeholder="{{host.mqtt.broker.address}}">
-          <button type="button" name="save_brokerip" onclick="save('brokerip')">Save
-          </button>(0.0.0.0 to use mDNS auto discovery)
+      <dd><input type="text" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" name="{{host.mqtt.broker.address_path}}" 
+           class="monitor_changes {{host.mqtt.broker.address_path}}" value="{{host.mqtt.broker.address}}" placeholder="{{host.mqtt.broker.address}}">
+           (0.0.0.0 to use mDNS auto discovery)
       </dd>
       <dt>Static MQTT broker port</dt>
-      <dd><input type="number" class="brokerport" value="{{host.mqtt.broker.port}}"></input>
-          <button type="button" name="save_brokerport" onclick="save('brokerport')">Save</button>
+      <dd><input type="number" class="monitor_changes {{host.mqtt.broker.port_path}}" value="{{host.mqtt.broker.port}}"></input>
       </dd>
       <dt>MQTT subscription prefix</dt>
-      <dd><input type="text" name="subscribeprefix" class="subscribeprefix" 
+      <dd><input type="text" name="{{host.mqtt.subscribe_prefix_path}}" class="monitor_changes {{host.mqtt.subscribe_prefix_path}}" 
            value="{{host.mqtt.subscribe_prefix}}" placeholder="some/subscribe/prefix/+">
-          <button type="button" name="save_subscribeprefix" onclick="save('subscribeprefix')">
-            Save
-          </button>
       </dd>
       <dt>MQTT publish prefix</dt>
-      <dd><input type="text" name="publishprefix" class="publishprefix"
+      <dd><input type="text" name="{{host.mqtt.publish_prefix_path}}" class="monitor_changes {{host.mqtt.publish_prefix_path}}"
            value="{{host.mqtt.publish_prefix}}" placeholder="some/publish/prefix">
-          <button type="button" name="save_publishprefix" onclick="save('publishprefix')">
-            Save
-          </button>
       </dd>
       <dt>&nbsp</dt> <dd>&nbsp</dd>
       <dt>HTTP Firmware host</dt>
-      <dd><input type="text" name="firmwarehost" class="firmwarehost"
+      <dd><input type="text" name="{{host.http.address_path}}" class="monitor_changes {{host.http.address_path}}"
            value="{{host.http.address}}" placeholder="http://your.firmware.host">
-          <button type="button" name="save_firmwarehost" onclick="save('firmwarehost')">
-            Save
-          </button>
       </dd>
       <dt>HTTP Firmware directory</dt>
-      <dd><input type="text" name="firmwaredirectory" class="firmwaredirectory"
+      <dd><input type="text" name="{{host.http.directory_path}}" class="monitor_changes {{host.http.directory_path}}"
            value="{{host.http.directory}}" placeholder="/some/directory/on/firmwarehost">
-          <button type="button" name="save_firmwaredirectory" onclick="save('firmwaredirectory')">
-            Save
-          </button>
       </dd>
       <dt>HTTP Firmware port</dt>
-      <dd><input type="number" class="firmwareport" value="{{host.http.port}}"></input>
-          <button type="button" name="save_firmwareport" onclick="save('firmwareport')">
-            Save
-          </button>
+      <dd><input type="number" class="monitor_changes {{host.http.port_path}}" value="{{host.http.port}}"></input>
       </dd>
       <dt>Config enable passphrase</dt>
-      <dd><input type="text" name="enablepassphrase" class="enablepassphrase" 
+      <dd><input type="text" name="{{config.enablepassphrase_path}}" class="monitor_changes {{config.enablepassphrase_path}}" 
            value="{{config.enablepassphrase}}" placeholder="Password_to_cahnge_config">
-          <button type="button" name="save_enablepassphrase" onclick="save('enablepassphrase')">
-            Save
-          </button>
       </dd>
       <dt>Config enable IO pin</dt>
       <dd>
-        <select class="enableiopin">
+        <select class="monitor_changes {{ui.iopin_path}}">
           {{#ui.iopin}}
           <option value="{{value}}" {{#selected}}selected{{/selected}}>
             {{value}}
@@ -107,7 +82,7 @@
         </select>
       </dd>
       <table>
-        <tr class="">
+        <tr>
           <th>index</th>
           <th>Topic</th>
           <th>type</th>
@@ -118,15 +93,15 @@
           <th></th>
         </tr>
         {{#io}}
-        <tr class="device_{{index}}">
+        <tr class="monitor_changes {{index_path}}">
           <td>{{index}}</td>
           <td>
             {{host.mqtt.subscribe_prefix}}
-            <input type="text" name="topic_{{index}}" class="device_{{index}}_topic" 
+            <input type="text" name="{{topic_path}}" class="monitor_changes {{topic_path}}" 
              value="{{topic}}" placeholder="some/topic">
           </td>
           <td>
-            <select class="device_{{index}}_iotype">
+            <select class="monitor_changes {{ui.iotype_path}}">
               {{#ui.iotype}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
@@ -135,7 +110,7 @@
             </select>
           </td>
           <td>
-            <select class="device_{{index}}_iopin">
+            <select class="monitor_changes {{ui.iopin_path}}">
               {{#ui.iopin}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
@@ -144,27 +119,24 @@
             </select>
           </td>
           <td>
-            <input type="number" max="255" min="0" class="device_{{index}}_io_default"
+            <input type="number" max="255" min="0" class="monitor_changes {{default_path}}"
              value="{{default}}"></input>
           </td>
           <td>
-            <input type="checkbox" class="device_{{index}}_inverted" 
+            <input type="checkbox" class="monitor_changes {{inverted_path}}" 
              {{#inverted}}checked{{/inverted}}></input>
           </td>
           <td>
-            <button type="button" name="save_{{index}}" onclick="save('device_{{index}}')">
               Save
-            </button>
           </td>
           <td>
-            <button type="button" name="del_{{index}}" onclick="del('device_{{index}}')">
               Delete
-            </button>
           </td>
         </tr>
         {{/io}}
       </table>
     </dl>
+    <input type='submit' onclick="Loader.saveChanges();" value='Save'>
   </body>
   <script src="script.js"></script>
 </html>

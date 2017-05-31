@@ -100,7 +100,7 @@ class TagBase{
     String content;
     int value;
     //DynamicJsonBuffer jsonBuffer;
-    StaticJsonBuffer<200> jsonBuffer;
+    StaticJsonBuffer<150> jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     root["name"] = getPath();
     root["_command"] = "teach";
@@ -131,28 +131,6 @@ class TagBase{
     callback(host_topic, host_payload);
 
     return return_val;
-  }
-
-  void sendDataRecursive(std::function< void(String&, String&) > callback){
-    //Serial.print("sendData() ");
-    //Serial.print(name);
-    //Serial.print(" ");
-    //Serial.println(getPath());
-
-    bool more = true;
-    sequence = 0;
-
-    while(more){
-      more = sendData(callback);
-
-      for(uint8_t child = 0; child < children_len; child++){
-        wdt_reset();
-        base_children[child]->parent = this;
-        base_children[child]->sendDataRecursive(callback);
-      }
-
-      sequence++;
-    }
   }
 
  protected:
@@ -1383,13 +1361,62 @@ class TagUiIopin : public TagBase{
   }
 };
 
+class TagUiIotypeSelected : public TagBase{
+ public:
+  TagUiIotypeSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
+                        children{
+                        } {}
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    for(int i = 0; i < MAX_DEVICES && value < getParent()->getParent()->sequence; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        value++;
+      }
+    }
+    content = (config->devices[value].io_type == index);
+
+    return (index < 5);
+  }
+};
+
+class TagUiIotypeValue : public TagBase{
+ public:
+  TagUiIotypeValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
+                        children{
+                        } {}
+  TagBase* children[0];
+
+  char values[6][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = index;
+    content = values[index];
+    return (index < 5);
+  }
+};
+
+class TagUiIotype : public TagBase{
+ public:
+  TagUiIotype(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iotype"),
+                        children{new TagUiIotypeValue(COMMON_PERAMS),
+                                 new TagUiIotypeSelected(COMMON_PERAMS)
+                        } {}
+  TagBase* children[2];
+  
+  uint8_t contentCount(){
+    return 6;
+  }
+};
+
 class TagUi : public TagBase{
  public:
   TagUi(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ui"),
                         children{new TagUiIopin(COMMON_PERAMS),
-                                 //new TagUiIotype(COMMON_PERAMS)
+                                 new TagUiIotype(COMMON_PERAMS)
                         } {}
-  TagBase* children[1];
+  TagBase* children[2];
   
   bool contentsAt(uint8_t index, String& /*content*/, int& /*value*/){
     return ((index +1) < getParent()->contentCount());
@@ -1436,14 +1463,57 @@ class TagIoTopic : public TagBase{
   }
 };
 
+class TagIoInverted : public TagBase{
+ public:
+  TagIoInverted(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "inverted"),
+                        children{
+                        } {}
+
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        value++;
+      }
+    }
+    content = config->devices[value].inverted ? "Y":"N";
+    value = config->devices[value].inverted;
+    return (bool)(getParent()->contentCount() - index -1);
+  }
+};
+
+class TagIoDefault : public TagBase{
+ public:
+  TagIoDefault(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "default"),
+                        children{
+                        } {}
+
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
+      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
+        value++;
+      }
+    }
+    content = config->devices[value].io_default;
+    return (bool)(getParent()->contentCount() - index -1);
+  }
+};
+
 class TagIo : public TagBase{
  public:
   TagIo(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "io"),
                         children{new TagIoIndex(COMMON_PERAMS),
                                  new TagIoTopic(COMMON_PERAMS),
+                                 new TagIoInverted(COMMON_PERAMS),
+                                 new TagIoDefault(COMMON_PERAMS),
                                  new TagUi(COMMON_PERAMS)
                         } {}
-  TagBase* children[3];
+  TagBase* children[5];
 
   uint8_t contentCount(){
     uint8_t count = 0;
@@ -1520,11 +1590,8 @@ class TagItterator{
     for(uint8_t i = 0; i < depth; i++){ Serial.print("  ");}
     Serial.print(" ");
     Serial.print(tag[depth]->name);
-    //Serial.print("\t\t");
-    //Serial.print(tag[depth]->contentCount());
     Serial.print("\t");
     Serial.println(tag[depth]->sequence);
-    //Serial.println(tag[depth]->getPath());
 
     if(tag[depth]->children_len > 0){
       tag[depth +1] = tag[depth]->getChild(0);
