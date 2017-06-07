@@ -10,8 +10,7 @@ var Loader =
     var context = this;
     window.onhashchange = function(){console.log("hash change");
                                      context.hashChange();
-                                     context.insertContent(),
-                                     context.watchFormChanges()};
+                                     context.insertContent()};
     this.requestData();
     this.loadFile(this.selected_file);
     this.loadFilenames();
@@ -333,11 +332,6 @@ var Loader =
     wsQueueSend(summary);
   },
 
-  watchFormChanges : function(){
-    var elements = document.getElementsByClassName("monitor_changes");
-    console.log(elements);
-  },
-
   saveChanges : function(){
     var elements = document.getElementsByClassName("monitor_changes");
     for(var i = 0; i < elements.length; i++){
@@ -350,8 +344,23 @@ var Loader =
           }
         }
       }
-      console.log(name, elements[i].value);
-      elements[i].onchange=function(){console.log("test");};
+      if(elements[i].value !== undefined && valueAtPath(name) !== undefined && 
+          elements[i].value !== valueAtPath(name)){
+        console.log(name, elements[i].value, valueAtPath(name));
+        var topic;
+        try {
+          topic = ws_data.host.mqtt.publish_prefix;
+          topic += "/hosts/";
+          topic += ws_data.host.hostname;
+        } catch(err){
+          topic = "";
+        }
+        var summary = {_subject: topic,
+                       _command: "update",
+                       path: name,
+                       value: elements[i].value};
+        wsQueueSend(summary);
+      }
     }
   }
 

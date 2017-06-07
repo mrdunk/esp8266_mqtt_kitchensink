@@ -317,3 +317,24 @@ function wsDeQueue(message){
     wsSend();
   }
 }
+
+function valueAtPath(path){
+  path = path.split('.');
+  var pointer = ws_data;
+  for(var i = 0; i < path.length; i++){
+    if(pointer[path[i]]){
+      pointer = pointer[path[i]];
+    } else {
+      return undefined;
+    }
+  }
+  if(pointer instanceof Array){
+    for(var i = 0; i < pointer.length; i++){
+      if(pointer[i].selected === "1"){
+        pointer = pointer[i].value;
+        break;
+      }
+    }
+  }
+  return pointer;
+}

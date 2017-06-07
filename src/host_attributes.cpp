@@ -54,6 +54,46 @@ void SetHostname(const char* new_hostname) {
 }
 
 
+bool validFileChar(const char letter, const uint16_t i){
+  if(letter >= 'A' && letter <= 'Z'){
+    // pass
+  } else if(letter >= 'a' && letter <= 'z'){
+    // pass
+  } else if(letter >= '0' && letter <= '9'){
+    // pass
+  } else if(letter == '.' && i > 0){
+    // Don't allow '.' as the first character in a file.
+    // pass
+  } else if(letter == '_'){
+    // pass
+  } else if(letter == '-'){
+    // pass
+  } else {
+    Serial.print("Invalid char in filename: ");
+    Serial.print(letter);
+    Serial.print("  at pos ");
+    Serial.println(i);
+    return false;
+  }
+  return true;
+}
+
+bool sanitizeFilePath(const String& buffer){
+  bool valid = true;
+  for(uint16_t i=0; i < buffer.length();i++){
+    valid &= (validFileChar(buffer[i], i) || buffer[i] == '/');
+  }
+  return valid;
+}
+
+bool sanitizeFilename(const String& buffer){
+  bool valid = true;
+  for(uint16_t i=0; i < buffer.length();i++){
+    valid &= validFileChar(buffer[i], i);
+  }
+  return valid;
+}
+
 // The URL to an HTTP server where firmware can be pulled from.
 void SetFirmwareServer(const char* new_fws, char* dest_buffer) {
   strncpy(dest_buffer, new_fws, STRING_LEN -1);

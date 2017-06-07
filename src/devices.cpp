@@ -120,6 +120,24 @@ String DeviceAddress(const Connected_device& device) {
   return return_value;
 }
 
+void DeviceAddressSet(Connected_device& device, const String& address){
+  uint8_t address_tail = 0;
+  uint8_t address_head = 0;
+  uint8_t segment = 0;
+  while(address_tail < address.length() && segment < ADDRESS_SEGMENTS){
+    address_head = address.indexOf("/", address_tail) +1;
+    if(address_head == 0){
+      address_head = address.length();
+    }
+    char* address_section = device.address_segment[segment].segment;
+    address.substring(address_tail, address_head).toCharArray(address_section, NAME_LEN);
+    sanitizeTopicSection(address_section);
+    Serial.println(address_section);
+    address_tail = address_head;
+    segment++;
+  }
+}
+
 // The part of the MQTT topic that is common to all messages on this device.
 void SetPrefix(const char* new_prefix, char* dest_buffer) {
   strncpy(dest_buffer, new_prefix, PREFIX_LEN -1);

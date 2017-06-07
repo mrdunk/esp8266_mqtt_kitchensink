@@ -34,7 +34,6 @@
 #include "mdns_actions.h"
 
 
-
 #define MAX_TAG_RECURSION 6
 
 #define COMMON_DEF Config* _config, MdnsLookup* _brokers, mdns::MDns* _mdns, Mqtt* _mqtt, Io* _io
@@ -53,6 +52,22 @@ class TagBase{
   virtual bool contentsAt(uint8_t /*index*/, String& content, int& value){
     content = "";
     value = 0;
+    return false;
+  }
+
+  bool contentsSaveWrapper(const String& content){
+    bool return_val = contentsSave(content);
+    if(return_val){
+      // Force reconnect to MQTT so we subscribe to any new addresses.
+      mqtt->forceDisconnect();
+      io->setup();
+      
+      config->save();
+    }
+    return return_val;
+  }
+
+  virtual bool contentsSave(const String& /*content*/){
     return false;
   }
 
@@ -242,7 +257,8 @@ class TagSession : public TagBase{
 
 class TagHostHostname : public TagBase{
  public:
-  TagHostHostname(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "hostname"),
+  TagHostHostname(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "hostname"),
                                 children{} { }
   TagBase* children[0];
   
@@ -250,6 +266,16 @@ class TagHostHostname : public TagBase{
     value = 0;
     content = config->hostname;
     return false;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostHostname.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    content.toCharArray(config->hostname, HOSTNAME_LEN);
+    sanitizeHostname(config->hostname);
+    return true;
   }
 };
 
@@ -532,7 +558,8 @@ class TagHostNw : public TagBase{
 
 class TagHostNwconfiguredAddress : public TagBase{
  public:
-  TagHostNwconfiguredAddress(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
+  TagHostNwconfiguredAddress(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
                                            children{} { }
   TagBase* children[0];
   
@@ -541,11 +568,21 @@ class TagHostNwconfiguredAddress : public TagBase{
     content = ip_to_string(config->ip);
     return false;
   }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostNwconfiguredAddress.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->ip = string_to_ip(content);
+    return true;
+  }
 };
 
 class TagHostNwconfiguredGateway : public TagBase{
  public:
-  TagHostNwconfiguredGateway(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "gateway"),
+  TagHostNwconfiguredGateway(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "gateway"),
                                            children{} { }
   TagBase* children[0];
   
@@ -554,11 +591,21 @@ class TagHostNwconfiguredGateway : public TagBase{
     content = ip_to_string(config->gateway);
     return false;
   }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostNwconfiguredGateway.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->gateway = string_to_ip(content);
+    return true;
+  }
 };
 
 class TagHostNwconfiguredSubnet : public TagBase{
  public:
-  TagHostNwconfiguredSubnet(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subnet"),
+  TagHostNwconfiguredSubnet(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subnet"),
                                           children{} { }
   TagBase* children[0];
   
@@ -566,6 +613,15 @@ class TagHostNwconfiguredSubnet : public TagBase{
     value = 0;
     content = ip_to_string(config->subnet);
     return false;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostNwconfiguredSubnet.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->subnet = string_to_ip(content);
+    return true;
   }
 };
 
@@ -642,6 +698,15 @@ class TagHostMqttBrokerAddress : public TagBase{
     content = ip_to_string(config->brokerip);
     return false;
   }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostMqttBrokerAddress.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->brokerip = string_to_ip(content);
+    return true;
+  }
 };
   
 class TagHostMqttBrokerPort : public TagBase{
@@ -655,6 +720,15 @@ class TagHostMqttBrokerPort : public TagBase{
     value = config->brokerport;
     content = config->brokerport;
     return false;
+  }
+
+  bool contentsSave(const String& content){
+    Serial.print("TagHostMqttBrokerPort.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->brokerport = content.toInt();
+    return true;
   }
 };
   
@@ -680,6 +754,16 @@ class TagHostMqttSubscriptionprefix : public TagBase{
     content = config->subscribeprefix;
     return false;
   }
+
+  bool contentsSave(const String& content){
+    Serial.print("TagHostMqttSubscriptionprefix.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    content.toCharArray(config->subscribeprefix, PREFIX_LEN);
+    sanitizeTopic(config->subscribeprefix);
+    return true;
+  }
 };
   
 class TagHostMqttPublishprefix : public TagBase{
@@ -694,6 +778,16 @@ class TagHostMqttPublishprefix : public TagBase{
     value = 0;
     content = config->publishprefix;
     return false;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostMqttPublishprefix.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    content.toCharArray(config->publishprefix, PREFIX_LEN);
+    sanitizeTopic(config->publishprefix);
+    return true;
   }
 };
   
@@ -720,6 +814,18 @@ class TagHostHttpAddress : public TagBase{
     content = config->firmwarehost;
     return false;
   }
+
+  bool contentsSave(const String& content){
+    Serial.print("TagHostHttpAddress.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    if(sanitizeFilename(content)){
+      content.toCharArray(config->firmwarehost, STRING_LEN);
+      return true;
+    }
+    return false;
+  }
 };
   
 class TagHostHttpPort : public TagBase{
@@ -734,6 +840,15 @@ class TagHostHttpPort : public TagBase{
     content = config->firmwareport;
     return false;
   }
+
+  bool contentsSave(const String& content){
+    Serial.print("TagHostHttpPort.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    config->firmwareport = content.toInt();
+    return true;
+  }
 };
   
 class TagHostHttpDirectory : public TagBase{
@@ -746,6 +861,18 @@ class TagHostHttpDirectory : public TagBase{
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
     value = 0;
     content = config->firmwaredirectory;
+    return false;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagHostHttpDirectory.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    if(sanitizeFilePath(content)){
+      content.toCharArray(config->firmwaredirectory, STRING_LEN);
+      return true;
+    }
     return false;
   }
 };
@@ -875,7 +1002,8 @@ class TagServersMqttServicevaliduntil : public TagBase{
 
 class TagServersMqttHostvaliduntil : public TagBase{
  public:
-  TagServersMqttHostvaliduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host_valid_until"), 
+  TagServersMqttHostvaliduntil(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "host_valid_until"), 
                         children{ } {}
   TagBase* children[0];
   bool contentsAt(uint8_t index, String& content, int& value){
@@ -891,7 +1019,8 @@ class TagServersMqttHostvaliduntil : public TagBase{
 
 class TagServersMqttAddressvaliduntil : public TagBase{
  public:
-  TagServersMqttAddressvaliduntil(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address_valid_until"),
+  TagServersMqttAddressvaliduntil(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address_valid_until"),
                         children{ } {}
   TagBase* children[0];
   bool contentsAt(uint8_t index, String& content, int& value){
@@ -1359,6 +1488,22 @@ class TagUiIopin : public TagBase{
   uint8_t contentCount(){
     return 11;
   }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagUiIoPin.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    if(strcmp(getParent()->getParent()->name, "root") == 0){
+      config->enableiopin = content.toInt();
+    } else {
+      // Not every config->devices entry is populated.
+      uint8_t value = config->labelToIndex(getParent()->sequence);
+
+      config->devices[value].iopin = content.toInt();
+    }
+    return true;
+  }
 };
 
 class TagUiIotypeSelected : public TagBase{
@@ -1388,7 +1533,7 @@ class TagUiIotypeValue : public TagBase{
                         } {}
   TagBase* children[0];
 
-  char values[6][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
+  const char values[6][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
   
   bool contentsAt(uint8_t index, String& content, int& value){
     value = index;
@@ -1407,6 +1552,17 @@ class TagUiIotype : public TagBase{
   
   uint8_t contentCount(){
     return 6;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagUiIoType.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+    // Not every config->devices entry is populated.
+    uint8_t value = config->labelToIndex(getParent()->sequence);
+
+    config->devices[value].setType(content);
+    return true;
   }
 };
 
@@ -1452,14 +1608,22 @@ class TagIoTopic : public TagBase{
   TagBase* children[0];
 
   bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
-      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-        value++;
-      }
-    }
+    // Not every config->devices entry is populated.
+    value = config->labelToIndex(index);
+
     content = DeviceAddress(config->devices[value]);
     return (bool)(getParent()->contentCount() - index -1);
+  }
+
+  bool contentsSave(const String& content){
+    Serial.print("TagIoTopic.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+    // Not every config->devices entry is populated.
+    uint8_t value = config->labelToIndex(sequence);
+
+    DeviceAddressSet(config->devices[value], content);
+    return true;
   }
 };
 
@@ -1472,12 +1636,9 @@ class TagIoInverted : public TagBase{
   TagBase* children[0];
 
   bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
-      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-        value++;
-      }
-    }
+    // Not every config->devices entry is populated.
+    value = config->labelToIndex(sequence);
+    
     content = config->devices[value].inverted ? "Y":"N";
     value = config->devices[value].inverted;
     return (bool)(getParent()->contentCount() - index -1);
@@ -1493,14 +1654,23 @@ class TagIoDefault : public TagBase{
   TagBase* children[0];
 
   bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
-      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-        value++;
-      }
-    }
+    // Not every config->devices entry is populated.
+    value = config->labelToIndex(sequence);
+
     content = config->devices[value].io_default;
+    value = config->devices[value].io_default;
     return (bool)(getParent()->contentCount() - index -1);
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagIoDefault.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+    // Not every config->devices entry is populated.
+    uint8_t value = config->labelToIndex(sequence);
+
+    config->devices[value].io_default = content.toInt();
+    return true;
   }
 };
 
@@ -1547,6 +1717,44 @@ class TagItterator{
     tag[0] = &tagRoot;
     reset();
     last_loop = true;
+  }
+
+  TagBase* getByPath(const String& path){
+    uint8_t path_pointer_head = 0;
+    uint8_t path_pointer_tail = 0;
+    TagBase* tag_pointer = tag[0];
+    uint8_t sequence = 0;
+    while(path_pointer_tail < path.length()){
+      path_pointer_head = path_pointer_tail;
+      path_pointer_tail = path.indexOf(".", path_pointer_head) +1;
+      if(path_pointer_tail == 0){
+        path_pointer_tail = path.length() +1;
+      }
+
+      if(path.substring(path_pointer_head, path_pointer_tail -1).toInt() ||
+          path.substring(path_pointer_head, path_pointer_tail -1) == "0")
+      {
+        sequence = path.substring(path_pointer_head, path_pointer_tail -1).toInt();
+      } else {
+        TagBase* child;
+        uint8_t i = 0;
+        while((child = tag_pointer->getChild(i))){
+          if(child != nullptr &&
+              String(child->name) == path.substring(path_pointer_head, path_pointer_tail -1))
+          {
+            tag_pointer = child;
+            tag_pointer->sequence = sequence;
+            sequence = 0;
+            break;
+          }
+          i++;
+        }
+      }
+    }
+    if(tag_pointer != nullptr){
+      Serial.println(tag_pointer->getPath());
+    }
+    return tag_pointer;
   }
 
   void reset(){

@@ -1492,31 +1492,3 @@ char* CompileMustache::findPattern(char* buff, const char* pattern, int line_len
   return NULL;
 }
 
-
-bool sanitizeFilename(const String& buffer){
-  bool valid = true;
-  for(unsigned int i=0; i < buffer.length();i++){
-    if(buffer[i] >= 'A' && buffer[i] <= 'Z'){
-      // pass
-    } else if(buffer[i] >= 'a' && buffer[i] <= 'z'){
-      // pass
-    } else if(buffer[i] >= '0' && buffer[i] <= '9'){
-      // pass
-    } else if(buffer[i] == '.' && i > 0){
-      // Don't allow '.' as the first character in a file.
-      // pass
-    } else if(buffer[i] == '_'){
-      // pass
-    } else if(buffer[i] == '-'){
-      // pass
-    } else {
-      Serial.print("Invalid char in filename: ");
-      Serial.print(buffer);
-      Serial.print("  at pos ");
-      Serial.println(i);
-      valid = false;
-    }
-  }
-  return valid;
-}
-

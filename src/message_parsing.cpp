@@ -198,7 +198,11 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
   parse_topic(config->subscribeprefix, topic_char, address_segments);
 
   Address_Segment host_all[ADDRESS_SEGMENTS] = {"hosts","_all"};
-  if(compare_addresses(address_segments, host_all)){
+  Address_Segment host_this[ADDRESS_SEGMENTS] = {"hosts", ""};
+  strncpy((char*)(&(host_this[1])), config->hostname, NAME_LEN);
+
+  if(compare_addresses(address_segments, host_all) ||
+      compare_addresses(address_segments, host_this)){
     if(command == "solicit"){
       //Serial.println("Announce host.");
       String host_topic;
@@ -208,6 +212,11 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
     } else if(command == "learn_all"){
       tag_itterator.reset();
       tag_itterator_callback = callback;
+    } else if(command == "update"){
+      String path = valueFromStringPayload(payload, "path");
+      String value = valueFromStringPayload(payload, "value");
+      TagBase* tag = tag_itterator.getByPath(path);
+      tag->contentsSaveWrapper(value);
     } else if(command == "learn"){
     }
   }

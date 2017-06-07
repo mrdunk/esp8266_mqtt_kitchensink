@@ -173,8 +173,5 @@ class CompileMustache{
 };
 
 
-// Ensure buffer contains only valid filename characters.
-bool sanitizeFilename(const String& buffer);
-
 
 #endif  // ESP8266__HTTP_SERVER__H

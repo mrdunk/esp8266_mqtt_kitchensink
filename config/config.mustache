@@ -89,8 +89,6 @@
           <th>IO pin</th>
           <th>Default val</th>
           <th>Inverted</th>
-          <th></th>
-          <th></th>
         </tr>
         {{#io}}
         <tr class="monitor_changes {{index_path}}">
@@ -125,12 +123,6 @@
           <td>
             <input type="checkbox" class="monitor_changes {{inverted_path}}" 
              {{#inverted}}checked{{/inverted}}></input>
-          </td>
-          <td>
-              Save
-          </td>
-          <td>
-              Delete
           </td>
         </tr>
         {{/io}}

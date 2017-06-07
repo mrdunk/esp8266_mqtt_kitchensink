@@ -62,6 +62,8 @@ void sanitizeTopic(char* buffer);
 
 // Return MQTT address of a device.
 String DeviceAddress(const Connected_device& device);
+// Set MQTT address of a device.
+void DeviceAddressSet(Connected_device& device, const String& address);
 
 // The part of the MQTT topic that is common to all messages on this device.
 void SetPrefix(const char* new_prefix, char* dest_buffer);

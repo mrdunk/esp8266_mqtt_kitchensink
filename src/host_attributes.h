@@ -95,4 +95,8 @@ bool enterList(String& input, bool& inside_list, int& list_index,
 bool enterSubSet(String& input, int& level);
 bool getKeyValue(String& input, String& key, String& value);
 
+// Ensure buffer contains only valid filename characters.
+bool sanitizeFilePath(const String& buffer);
+bool sanitizeFilename(const String& buffer);
+
 #endif  // ESP8266__HOST_ATTRIBUTES_H
