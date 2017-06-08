@@ -157,7 +157,11 @@ var Loader =
         if(pointer === undefined){
           return false;
         }
-        var p = path[i].split('_')[0];
+        var p = path[i];
+        if(path[i].endsWith("_path")){
+          console.log(path[i].lastIndexOf("_"), path[i].substring(0, path[i].lastIndexOf("_")));
+          p = path[i].substring(0, path[i].lastIndexOf("_"));
+        }
         pointer = pointer[p];
         if(pointer === undefined){
           return false;

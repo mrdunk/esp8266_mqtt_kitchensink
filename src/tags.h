@@ -58,11 +58,11 @@ class TagBase{
   bool contentsSaveWrapper(const String& content){
     bool return_val = contentsSave(content);
     if(return_val){
-      // Force reconnect to MQTT so we subscribe to any new addresses.
-      mqtt->forceDisconnect();
-      io->setup();
-      
       config->save();
+
+      // Force reconnect to MQTT so we subscribe to any new addresses.
+      //mqtt->forceDisconnect();
+      //io->setup();
     }
     return return_val;
   }
