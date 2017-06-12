@@ -23,7 +23,6 @@
 #include "message_parsing.h"
 #include "ipv4_helpers.h"
 
-extern TagRoot root_tag;
 extern TagItterator tag_itterator;
 extern std::function< void(String&, String&) > tag_itterator_callback;
 

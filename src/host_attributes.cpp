@@ -25,8 +25,11 @@
 #include "host_attributes.h"
 #include "serve_files.h"
 #include "ipv4_helpers.h"
+#include "tags.h"
 
 extern Config config;
+extern TagRoot root_tag;
+extern TagItterator tag_itterator;
 
 
 // Ensure buffer contains only valid hostname characters.
@@ -326,18 +329,17 @@ bool Config::load(const String& filename, bool test){
     // Remove any preceding "," which are left from previous iterations.
     line.trim();
 
-    //Lets read line by line from the file
+    // Read line by line from the file
     if(line == "" || line == ":"){
       line_num++;
       line += file.readStringUntil('\n');
     }
 
     if(line.startsWith("#")){
-      // Rest of line is a comment so ignore it.
+      // The rest of line is a comment so ignore it.
       line = "";
     } else if(getKeyValue(line, key, value)){
       key.toLowerCase();
-      //Serial.printf("%i:%s  %s : %s\n", level, parent.c_str(), key.c_str(), value.c_str());
       if((test and !testValue(parent, key)) || !setValue(parent, key, value, device)){
         error = true;
         Serial.printf("Problem in file: %s  on line: %i\n", filename.c_str(), line_num);
@@ -501,6 +503,101 @@ bool Config::save(const String& filename){
   }
   file.println("  ]");
   file.println("}");
+
+  file.close();
+  Serial.println("Done saving config file.");
+
+  SPIFFS.end();
+  return true;
+}
+
+bool Config::save2(const String& filename){
+	bool result = SPIFFS.begin();
+  if(!result){
+		Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
+    return false;
+  }
+
+	// this opens the file in read-mode
+	File file = SPIFFS.open(filename, "r");
+
+	if (!file) {
+		Serial.print("File doesn't exist yet. Creating it: ");
+	} else {
+		Serial.print("Overwriting file: ");
+	}
+  Serial.println(filename);
+  file.close();
+
+	// open the file in write mode
+	file = SPIFFS.open(filename, "w");
+	if (!file) {
+		Serial.println("file creation failed");
+    SPIFFS.end();
+		return false;
+	}
+
+  TagBase* path[MAX_TAG_RECURSION] = {nullptr};
+  TagBase* path_last[MAX_TAG_RECURSION] = {nullptr};
+  uint8_t list_count[MAX_TAG_RECURSION] = {0};
+  uint8_t depth = 0;
+  tag_itterator.reset();
+  while(true){
+    TagBase* tag = tag_itterator.loop(&depth);
+    if(tag == nullptr || tag->configurable){
+      for(uint8_t i = 0; i < MAX_TAG_RECURSION; i++){
+        path[i] = nullptr;
+      }
+      path[depth] = tag;
+      for(int8_t i = depth -1; i >= 0; i--){
+        path[i] = path[i +1]->getParent();
+      }
+
+      for(int8_t i = MAX_TAG_RECURSION -1; i >= 0; i--){
+        if(path[i] != path_last[i] && path_last[i] != nullptr){
+          if(path_last[i]->children_len > 0){
+            for(uint8_t j=0; j < i; j++){file.print("  ");}
+            file.println("},");
+          }
+          if(path_last[i]->contentCount() > 0 && path_last[i]->direct_value == false){
+            for(uint8_t j=0; j < i; j++){file.print("  ");}
+            file.println("],");
+          }
+        }
+      }
+
+      if(tag == nullptr){
+        break;
+      }
+
+      for(uint8_t i = 0; i < MAX_TAG_RECURSION; i++){
+        if(path[i] != nullptr && path[i] != path_last[i]){
+          for(uint8_t j=0; j < i; j++){file.print("  ");}
+          file.print(path[i]->name);
+          if(path[i]->contentCount() > 0 && path[i]->direct_value == false){
+            for(uint8_t j=0; j < i; j++){file.print("  ");}
+            file.println(" : [");
+          }
+          if(path[i]->children_len > 0){
+            for(uint8_t j=0; j < i; j++){file.print("  ");}
+            file.println(" : {");
+          } else {
+            String content;
+            int value;
+            path[i]->contentsAt(path[i]->sequence, content, value);
+            file.print(" : \"");
+            file.print(content);
+            file.println("\", ");
+          }
+        }
+      }
+
+      for(uint8_t i = 0; i < MAX_TAG_RECURSION; i++){
+        path_last[i] = path[i];
+      }
+    }
+  }
 
   file.close();
   Serial.println("Done saving config file.");

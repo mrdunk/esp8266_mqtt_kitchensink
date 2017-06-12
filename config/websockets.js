@@ -174,24 +174,47 @@ function wsStart(){
     if(payload !== undefined){
       updatePage(payload);
       if(payload._command === "teach"){
-        console.log("websocket.onmessage", payload);
+        //console.log("websocket.onmessage", payload);
         wsDeQueue(payload);
 
-        var path = payload.name.split(".");
         var container = ws_data;
-        for(var i = 0; i < path.length -1; i++){
-          if(container[path[i]] === undefined || container[path[i]] === "_"){
-            container[path[i]] = {};
-            if(i < path.length -2 && parseInt(path[i +1], 10).toString() === path[i +1]){
-              container[path[i]] = [];
-            }
-          }
-          container = container[path[i]];
-        }
+        var path = payload.name.split(".");
+        console.log(path.join("."));
 
-        var last = path[path.length -1];
-        container[last] = payload.content;
-        container[last + "_path"] = payload.name;
+        for(var i = 0; i < path.length; i++){
+          var depth;
+          var name = path[i];
+          if(parseInt(path[i +1], 10).toString() === path[i +1]){
+            depth = parseInt(path[i +1], 10);
+            i++;
+          } else {
+            depth = undefined;
+          }
+
+          if(i < path.length -1){
+            if(typeof(container[name]) !== "object"){
+              if(depth === undefined){
+                container[name] = {};
+              } else {
+                container[name] = [];
+              }
+            }
+          } else if(container[name] === undefined){
+            container[name] = payload.content;
+          }
+
+          if(depth === undefined){
+            container = container[name];
+          } else {
+            if(!container.hasOwnProperty(name)){
+              container[name] = [];
+            }
+            if(!container[name].hasOwnProperty(depth)){
+              container[name][depth] = {};
+            }
+            container = container[name][depth];
+          }
+        }
 
         localStorage.esp8266_kitchensink = JSON.stringify(ws_data);
 

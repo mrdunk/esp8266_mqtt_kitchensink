@@ -262,13 +262,12 @@ void MdnsLookup::ParseMDnsAnswer(const mdns::Answer* answer) {
 }
 
 void MdnsLookup::CleanBuffer(){
-  const unsigned int now = millis() / 1000;
   int worst_result = -1;
   float worst_ratio = 0;
   int total_samples;
  
   // Get worst expired result.
-  for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
+  for (uint16_t i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
     total_samples = hosts[i].success_counter + hosts[i].fail_counter;
     if(total_samples == 0){
       // Prevent division by zero;
@@ -286,7 +285,7 @@ void MdnsLookup::CleanBuffer(){
 
   if(worst_result < 0){
     // Since no entries have expired, just scrap the worst result.
-    for (int i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
+    for (uint16_t i = 0; i < HOSTS_BUFFER_SIZE; ++i) {
       total_samples = hosts[i].success_counter + hosts[i].fail_counter;
       if(total_samples == 0){
         // Prevent division by zero;
@@ -333,7 +332,6 @@ bool MdnsLookup::HostNotTImedOut(Host& host){
 }
 
 Host MdnsLookup::GetHost(int best_host) {
-  const unsigned int now = millis() / 1000;
   int total_samples;
   float best_ratio = 0;
 

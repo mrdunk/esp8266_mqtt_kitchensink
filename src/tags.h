@@ -61,13 +61,16 @@ class TagBase{
       config->save();
 
       // Force reconnect to MQTT so we subscribe to any new addresses.
-      //mqtt->forceDisconnect();
-      //io->setup();
+      // TODO: only do this if io has changed.
+      mqtt->forceDisconnect();
+      io->setup();
     }
     return return_val;
   }
 
   virtual bool contentsSave(const String& /*content*/){
+    configurable = false;
+    direct_value = false;
     return false;
   }
 
@@ -160,6 +163,162 @@ class TagBase{
   const uint8_t children_len;
   const char* name;
   uint8_t sequence;
+  bool configurable;
+  bool direct_value;
+};
+
+class TagUiIopinValue : public TagBase{
+ public:
+  TagUiIopinValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = values[index];
+    content = value;
+    return (index < 10);
+  }
+};
+
+class TagUiIopinSelected : public TagBase{
+ public:
+  TagUiIopinSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
+                        children{
+                        } {}
+  TagBase* children[0];
+  
+  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = 0;
+    content = "un-set";
+
+    if(strcmp(getParent()->getParent()->name, "enable") == 0){
+      value = (config->enableiopin == values[index]);
+      content = value;
+    } else if(strcmp(getParent()->getParent()->name, "io") == 0){
+      // Not every config->devices entry is populated.
+      value = config->labelToIndex(getParent()->sequence);
+      
+      content = (config->devices[value].iopin == values[index]);
+    }
+
+    return (index < 10);
+  }
+};
+
+class TagUiIopin : public TagBase{
+ public:
+  TagUiIopin(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iopin"),
+                        children{new TagUiIopinValue(COMMON_PERAMS),
+                                 new TagUiIopinSelected(COMMON_PERAMS)
+                        } {
+    configurable = true;
+    direct_value = true;
+                        }
+  TagBase* children[2];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = "un-set";
+
+    if(strcmp(getParent()->name, "enable") == 0){
+      value = config->enableiopin;
+      content = value;
+    } else if(strcmp(getParent()->name, "io") == 0){
+      // Not every config->devices entry is populated.
+      value = config->labelToIndex(sequence);
+      
+      content = config->devices[value].iopin;
+      value = config->devices[value].iopin;
+    }
+
+    return false;
+  }
+
+  uint8_t contentCount(){
+    return 11;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagUiIoPin.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+    Serial.println(getParent()->name);
+
+    if(strcmp(getParent()->name, "enable") == 0){
+      config->enableiopin = content.toInt();
+    } else if(strcmp(getParent()->name, "io") == 0){
+      // Not every config->devices entry is populated.
+      uint8_t value = config->labelToIndex(sequence);
+
+      config->devices[value].iopin = content.toInt();
+    }
+    return true;
+  }
+};
+
+class TagUiIotypeSelected : public TagBase{
+ public:
+  TagUiIotypeSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
+                        children{
+                        } {}
+  TagBase* children[0];
+
+  bool contentsAt(uint8_t index, String& content, int& value){
+    // Not every config->devices entry is populated.
+    value = config->labelToIndex(getParent()->sequence);
+
+    content = (config->devices[value].io_type == index);
+
+    return (index < 5);
+  }
+};
+
+class TagUiIotypeValue : public TagBase{
+ public:
+  TagUiIotypeValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
+                        children{
+                        } {}
+  TagBase* children[0];
+
+  const char values[6][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
+  
+  bool contentsAt(uint8_t index, String& content, int& value){
+    value = index;
+    content = values[index];
+    return (index < 5);
+  }
+};
+
+class TagUiIotype : public TagBase{
+ public:
+  TagUiIotype(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iotype"),
+                        children{new TagUiIotypeValue(COMMON_PERAMS),
+                                 new TagUiIotypeSelected(COMMON_PERAMS)
+                        } {
+    configurable = true;
+                        }
+  TagBase* children[2];
+  
+  uint8_t contentCount(){
+    return 6;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagUiIoType.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    // Not every config->devices entry is populated.
+    uint8_t value = config->labelToIndex(sequence);
+
+    config->devices[value].setType(content);
+    return true;
+  }
 };
 
 class TagSessionValid : public TagBase{
@@ -244,6 +403,41 @@ class TagSessionOverrideauth : public TagBase{
   }
 };
 
+class TagSessionEnablePassword : public TagBase{
+ public:
+  TagSessionEnablePassword(COMMON_DEF) :
+    TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "password"),
+                                children{} {
+    configurable = true;
+                                }
+  TagBase* children[0];
+  
+  bool contentsAt(uint8_t /*index*/, String& content, int& value){
+    value = 0;
+    content = "****";
+    return false;
+  }
+  
+  bool contentsSave(const String& content){
+    Serial.print("TagSessionEnablePassword.contentsSave(");
+    Serial.print(content);
+    Serial.println(")");
+
+    content.toCharArray(config->enablepassphrase, STRING_LEN);
+    return true;
+  }
+};
+
+class TagSessionEnable : public TagBase{
+ public:
+  TagSessionEnable(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "enable"),
+                                        children{
+                                          new TagUiIopin(COMMON_PERAMS),
+                                          new TagSessionEnablePassword(COMMON_PERAMS),
+                                        } {}
+  TagBase* children[2];
+};
+
 class TagSession : public TagBase{
  public:
   TagSession(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "session"),
@@ -251,15 +445,19 @@ class TagSession : public TagBase{
                                     new TagSessionValiduntil(COMMON_PERAMS),
                                     new TagSessionProvidedtoken(COMMON_PERAMS),
                                     new TagSessionExpectedtoken(COMMON_PERAMS),
-                                    new TagSessionOverrideauth(COMMON_PERAMS)} { }
-  TagBase* children[5];
+                                    new TagSessionOverrideauth(COMMON_PERAMS),
+                                    new TagSessionEnable(COMMON_PERAMS),
+                           } { }
+  TagBase* children[6];
 };
 
 class TagHostHostname : public TagBase{
  public:
   TagHostHostname(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "hostname"),
-                                children{} { }
+                                children{} {
+    configurable = true;
+                                }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -275,6 +473,7 @@ class TagHostHostname : public TagBase{
 
     content.toCharArray(config->hostname, HOSTNAME_LEN);
     sanitizeHostname(config->hostname);
+    WiFi.hostname(config->hostname);
     return true;
   }
 };
@@ -560,7 +759,9 @@ class TagHostNwconfiguredAddress : public TagBase{
  public:
   TagHostNwconfiguredAddress(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
-                                           children{} { }
+                                           children{} {
+    configurable = true;
+                                           }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -583,7 +784,9 @@ class TagHostNwconfiguredGateway : public TagBase{
  public:
   TagHostNwconfiguredGateway(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "gateway"),
-                                           children{} { }
+                                           children{} {
+    configurable = true;
+                                           }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -606,7 +809,9 @@ class TagHostNwconfiguredSubnet : public TagBase{
  public:
   TagHostNwconfiguredSubnet(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subnet"),
-                                          children{} { }
+                                          children{} {
+    configurable = true;
+                                          }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -689,8 +894,9 @@ class TagHostMqttBrokerAddress : public TagBase{
  public:
   TagHostMqttBrokerAddress(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -712,8 +918,9 @@ class TagHostMqttBrokerAddress : public TagBase{
 class TagHostMqttBrokerPort : public TagBase{
  public:
   TagHostMqttBrokerPort(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "port"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -745,8 +952,10 @@ class TagHostMqttSubscriptionprefix : public TagBase{
  public:
   TagHostMqttSubscriptionprefix(COMMON_DEF) : 
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "subscribe_prefix"),
-                                    children{
-                                    } { }
+                                    children{ } {
+
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -770,8 +979,9 @@ class TagHostMqttPublishprefix : public TagBase{
  public:
   TagHostMqttPublishprefix(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "publish_prefix"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -805,8 +1015,9 @@ class TagHostHttpAddress : public TagBase{
  public:
   TagHostHttpAddress(COMMON_DEF) :
     TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "address"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -831,8 +1042,9 @@ class TagHostHttpAddress : public TagBase{
 class TagHostHttpPort : public TagBase{
  public:
   TagHostHttpPort(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "port"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -854,8 +1066,9 @@ class TagHostHttpPort : public TagBase{
 class TagHostHttpDirectory : public TagBase{
  public:
   TagHostHttpDirectory(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "directory"),
-                                    children{
-                                    } { }
+                                    children{ } {
+    configurable = true;
+                                    }
   TagBase* children[0];
   
   bool contentsAt(uint8_t /*index*/, String& content, int& value){
@@ -1431,154 +1644,6 @@ class TagFs : public TagBase{
   TagBase* children[2];
 };
 
-class TagUiIopinValue : public TagBase{
- public:
-  TagUiIopinValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
-                        children{
-                        } {}
-  TagBase* children[0];
-  
-  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
-
-  bool contentsAt(uint8_t index, String& content, int& value){
-    value = values[index];
-    content = value;
-    return (index < 10);
-  }
-};
-
-class TagUiIopinSelected : public TagBase{
- public:
-  TagUiIopinSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
-                        children{
-                        } {}
-  TagBase* children[0];
-  
-  int values[11] = {0,1,2,3,4,5,12,13,14,15,16};  // Valid output pins.
-
-  bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    content = "un-set";
-
-    if(strcmp(getParent()->getParent()->getParent()->name, "root") == 0){
-      value = (config->enableiopin == values[index]);
-      content = value;
-    } else if(strcmp(getParent()->getParent()->getParent()->name, "io") == 0){
-      value = 0;
-      for(int i = 0; i < MAX_DEVICES && value < getParent()->getParent()->sequence; ++i) {
-        if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-          value++;
-        }
-      }
-      content = (config->devices[value].iopin == values[index]);
-    }
-
-    return (index < 10);
-  }
-};
-
-class TagUiIopin : public TagBase{
- public:
-  TagUiIopin(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iopin"),
-                        children{new TagUiIopinValue(COMMON_PERAMS),
-                                 new TagUiIopinSelected(COMMON_PERAMS)
-                        } {}
-  TagBase* children[2];
-  
-  uint8_t contentCount(){
-    return 11;
-  }
-  
-  bool contentsSave(const String& content){
-    Serial.print("TagUiIoPin.contentsSave(");
-    Serial.print(content);
-    Serial.println(")");
-
-    if(strcmp(getParent()->getParent()->name, "root") == 0){
-      config->enableiopin = content.toInt();
-    } else {
-      // Not every config->devices entry is populated.
-      uint8_t value = config->labelToIndex(getParent()->sequence);
-
-      config->devices[value].iopin = content.toInt();
-    }
-    return true;
-  }
-};
-
-class TagUiIotypeSelected : public TagBase{
- public:
-  TagUiIotypeSelected(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "selected"),
-                        children{
-                        } {}
-  TagBase* children[0];
-
-  bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    for(int i = 0; i < MAX_DEVICES && value < getParent()->getParent()->sequence; ++i) {
-      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-        value++;
-      }
-    }
-    content = (config->devices[value].io_type == index);
-
-    return (index < 5);
-  }
-};
-
-class TagUiIotypeValue : public TagBase{
- public:
-  TagUiIotypeValue(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "value"),
-                        children{
-                        } {}
-  TagBase* children[0];
-
-  const char values[6][12] = {"test", "onoff", "pwm", "inputpullup", "input", "timer"};
-  
-  bool contentsAt(uint8_t index, String& content, int& value){
-    value = index;
-    content = values[index];
-    return (index < 5);
-  }
-};
-
-class TagUiIotype : public TagBase{
- public:
-  TagUiIotype(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "iotype"),
-                        children{new TagUiIotypeValue(COMMON_PERAMS),
-                                 new TagUiIotypeSelected(COMMON_PERAMS)
-                        } {}
-  TagBase* children[2];
-  
-  uint8_t contentCount(){
-    return 6;
-  }
-  
-  bool contentsSave(const String& content){
-    Serial.print("TagUiIoType.contentsSave(");
-    Serial.print(content);
-    Serial.println(")");
-    // Not every config->devices entry is populated.
-    uint8_t value = config->labelToIndex(getParent()->sequence);
-
-    config->devices[value].setType(content);
-    return true;
-  }
-};
-
-class TagUi : public TagBase{
- public:
-  TagUi(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "ui"),
-                        children{new TagUiIopin(COMMON_PERAMS),
-                                 new TagUiIotype(COMMON_PERAMS)
-                        } {}
-  TagBase* children[2];
-  
-  bool contentsAt(uint8_t index, String& /*content*/, int& /*value*/){
-    return ((index +1) < getParent()->contentCount());
-  }
-};
-
 class TagIoIndex : public TagBase{
  public:
   TagIoIndex(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "index"),
@@ -1588,12 +1653,9 @@ class TagIoIndex : public TagBase{
   TagBase* children[0];
 
   bool contentsAt(uint8_t index, String& content, int& value){
-    value = 0;
-    for(int i = 0; i < MAX_DEVICES && value < index; ++i) {
-      if(strlen(config->devices[i].address_segment[0].segment) > 0) {
-        value++;
-      }
-    }
+    // Not every config->devices entry is populated.
+    value = config->labelToIndex(index);
+
     content = value;
     return (bool)(getParent()->contentCount() - index -1);
   }
@@ -1602,8 +1664,9 @@ class TagIoIndex : public TagBase{
 class TagIoTopic : public TagBase{
  public:
   TagIoTopic(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "topic"),
-                        children{
-                        } {}
+                        children{ } {
+    configurable = true;
+                        }
 
   TagBase* children[0];
 
@@ -1619,6 +1682,7 @@ class TagIoTopic : public TagBase{
     Serial.print("TagIoTopic.contentsSave(");
     Serial.print(content);
     Serial.println(")");
+
     // Not every config->devices entry is populated.
     uint8_t value = config->labelToIndex(sequence);
 
@@ -1637,7 +1701,7 @@ class TagIoInverted : public TagBase{
 
   bool contentsAt(uint8_t index, String& content, int& value){
     // Not every config->devices entry is populated.
-    value = config->labelToIndex(sequence);
+    value = config->labelToIndex(index);
     
     content = config->devices[value].inverted ? "Y":"N";
     value = config->devices[value].inverted;
@@ -1648,14 +1712,15 @@ class TagIoInverted : public TagBase{
 class TagIoDefault : public TagBase{
  public:
   TagIoDefault(COMMON_DEF) : TagBase(children, CHILDREN_LEN, COMMON_PERAMS, "default"),
-                        children{
-                        } {}
+                        children{ } {
+    configurable = true;
+                        }
 
   TagBase* children[0];
 
   bool contentsAt(uint8_t index, String& content, int& value){
     // Not every config->devices entry is populated.
-    value = config->labelToIndex(sequence);
+    value = config->labelToIndex(index);
 
     content = config->devices[value].io_default;
     value = config->devices[value].io_default;
@@ -1666,6 +1731,7 @@ class TagIoDefault : public TagBase{
     Serial.print("TagIoDefault.contentsSave(");
     Serial.print(content);
     Serial.println(")");
+
     // Not every config->devices entry is populated.
     uint8_t value = config->labelToIndex(sequence);
 
@@ -1681,9 +1747,10 @@ class TagIo : public TagBase{
                                  new TagIoTopic(COMMON_PERAMS),
                                  new TagIoInverted(COMMON_PERAMS),
                                  new TagIoDefault(COMMON_PERAMS),
-                                 new TagUi(COMMON_PERAMS)
+                                 new TagUiIopin(COMMON_PERAMS),
+                                 new TagUiIotype(COMMON_PERAMS)
                         } {}
-  TagBase* children[5];
+  TagBase* children[6];
 
   uint8_t contentCount(){
     uint8_t count = 0;
@@ -1704,16 +1771,18 @@ class TagRoot : public TagBase{
                                  new TagServers(COMMON_PERAMS),
                                  new TagMdns(COMMON_PERAMS),
                                  new TagFs(COMMON_PERAMS),
-                                 new TagUi(COMMON_PERAMS),
                                  new TagIo(COMMON_PERAMS)
                         } {}
-  TagBase* children[7];
+  TagBase* children[6];
 };
 
 
 class TagItterator{
  public: 
   TagItterator(TagRoot& tagRoot) {
+    for(uint8_t i = 0; i < MAX_TAG_RECURSION; i++){
+      tag[i] = nullptr;
+    }
     tag[0] = &tagRoot;
     reset();
     last_loop = true;
@@ -1778,12 +1847,17 @@ class TagItterator{
     return nullptr;
   }
 
-  TagBase* loop(){
+  TagBase* loop(uint8_t* p_depth = nullptr){
+    uint8_t depth = 0;
+
     if(last_loop){
+      if(p_depth != nullptr){
+        *p_depth = 0;
+      }
       return nullptr;
     }
 
-    int8_t depth;
+
     for(depth = 0; depth < MAX_TAG_RECURSION; depth++){
       if(tag[depth] == nullptr){
         depth--;
@@ -1824,6 +1898,9 @@ class TagItterator{
       }
     }
 
+    if(p_depth != nullptr){
+      *p_depth = depth;
+    }
     return return_tag;
   }
 

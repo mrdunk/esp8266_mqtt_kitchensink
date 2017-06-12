@@ -68,17 +68,17 @@
       <dd><input type="number" class="monitor_changes {{host.http.port_path}}" value="{{host.http.port}}"></input>
       </dd>
       <dt>Config enable passphrase</dt>
-      <dd><input type="text" name="{{config.enablepassphrase_path}}" class="monitor_changes {{config.enablepassphrase_path}}" 
-           value="{{config.enablepassphrase}}" placeholder="Password_to_cahnge_config">
+      <dd><input type="text" name="{{session.enable.password}}" class="monitor_changes {{session.enable.password_path}}" 
+           value="{{session.enable.password}}" placeholder="Password_to_cahnge_config">
       </dd>
       <dt>Config enable IO pin</dt>
       <dd>
-        <select class="monitor_changes {{ui.iopin_path}}">
-          {{#ui.iopin}}
+        <select class="monitor_changes {{session.enable.iopin_path}}">
+          {{#session.enable.iopin}}
           <option value="{{value}}" {{#selected}}selected{{/selected}}>
             {{value}}
           </option>
-          {{/ui.iopin}}
+          {{/session.enable.iopin}}
         </select>
       </dd>
       <table>
@@ -99,21 +99,21 @@
              value="{{topic}}" placeholder="some/topic">
           </td>
           <td>
-            <select class="monitor_changes {{ui.iotype_path}}">
-              {{#ui.iotype}}
+            <select class="monitor_changes {{iotype_path}}">
+              {{#iotype}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
               </option>
-              {{/ui.iotype}}
+              {{/iotype}}
             </select>
           </td>
           <td>
-            <select class="monitor_changes {{ui.iopin_path}}">
-              {{#ui.iopin}}
+            <select class="monitor_changes {{iopin_path}}">
+              {{#iopin}}
               <option value="{{value}}" {{#selected}}selected{{/selected}}>
                 {{value}}
               </option>
-              {{/ui.iopin}}
+              {{/iopin}}
             </select>
           </td>
           <td>

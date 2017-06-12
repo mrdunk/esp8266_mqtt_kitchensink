@@ -26,26 +26,6 @@
 #include "mdns_actions.h"
 #include "mqtt.h"
 
-#define TAG_NAME_LEN 64
-#define MAX_LIST_RECURSION 4 
-
-enum tagType{
-  tagUnset,
-  tagPlain,
-  tagList,
-  tagInverted,
-  tagEnd,
-  tagListItem
-};
-
-struct List{
-  char* buffer;
-  int buffer_len;
-  char tag[TAG_NAME_LEN];
-  char parent[(TAG_NAME_LEN * MAX_LIST_RECURSION) + MAX_LIST_RECURSION];
-  bool inverted;
-};
-
 
 class MyESP8266WebServer : public ESP8266WebServer{
  public:
@@ -71,21 +51,23 @@ class HttpServer{
   void loop();
  private:
   MyESP8266WebServer esp8266_http_server;
-  void fetchCookie();
   void onTest();
-  void pullFiles();
-  void handleLogin();
-  bool isAuthentified(bool redirect=true);
-  void handleNotFound();
-  void onFileOperations(const String& _filename = "");
-  void fileBrowser(bool names_only=false);
   void onRoot();
-  const String mime(const String& filename);
-  void onSet();
   void onReset();
+  void onFileOperations(const String& _filename = "");
+  void onPullFileMenu();
+  void onLogin();
+  void onNotFound();
+  void fileBrowser(bool names_only=false);
+  
+  void fetchCookie();
+  bool isAuthentified(bool redirect=true);
+  
+  const String mime(const String& filename);
   bool fileOpen(const String& filename);
-  bool fileRead(char* buffer_in, const int buffer_in_len);
+  //bool fileRead(char* buffer_in, const int buffer_in_len);
   void fileClose();
+
   File file;
   char* buffer;
   const int buffer_size;
@@ -94,84 +76,11 @@ class HttpServer{
   mdns::MDns* mdns;
   Mqtt* mqtt;
   Io* io;
+
   void bufferClear();
   bool bufferAppend(const String& to_add);
   bool bufferAppend(const char* to_add);
-  bool bufferInsert(const String& to_insert);
-  bool bufferInsert(const char* to_insert);
 };
-
-/* Uses Mustache style templates for generating web pages.
- * http://mustache.github.io/mustache.5.html
- * */
-class CompileMustache{
- public:
-  CompileMustache(char* buffer,
-                  const int _buffer_size,
-                  Config* _config,
-                  MdnsLookup* _brokers,
-                  mdns::MDns* _mdns,
-                  Mqtt* _mqtt,
-                  Io* _io,
-                  const uint32_t _session_token);
-
-  void parseBuffer(char* buffer_in, int buffer_in_len,
-                   char*& buffer_out, int& buffer_out_len,
-                   int& list_depth, bool& parsing_list);
-
-  /* Find a set of characters within buffer.
-   * Returns: Pointer in buffer to start of first match. */
-  char* findPattern(char* buff, const char* pattern, int line_len) const;
-  char* findClosingTag(char* buffer_in, const int buffer_in_len, const char* tag);
-
-  /* Replace a {{tag}} with the string in tag_content. */
-  void replaceTag(char* destination,
-                   int& element_count,
-                   const char* tag,
-                   const tagType type,
-                   const int len,
-                   const int list_depth);
-  void enterList(char* parents, char* tag);
-  void exitList(char* parents);
-
-  /* Populate tag variable with the contents of a tag in buffer pointed to by
-   * tag_position.
-   * Returns: true/false depending on whether a {{tag}} was successfully parsed.*/
-  bool tagName(char* tag_start, char* tag, tagType& type);
-
-  int depthOfParent(char* list_parent, const char* parent){
-    char* start = strstr(list_parent, parent);
-    if(!start){
-      return 0;
-    }
-    int depth = 1;
-    for(char* pos = list_parent; pos < start; pos++){
-      if(*pos == '|'){
-        depth++;
-      }
-    }
-    return depth;
-  }
-
- private:
-  char* buffer;
-  int buffer_size;
-  Config* config;
-  MdnsLookup* brokers;
-  mdns::MDns* mdns;
-  Mqtt* mqtt;
-  Io* io;
-  char list_parent[128];
-  const uint32_t session_token; 
-  int head;
-  int tail;
-  int list_element[MAX_LIST_RECURSION];  
-  int list_size[MAX_LIST_RECURSION];
-  unsigned int list_cache_time[MAX_LIST_RECURSION];
-
-  List list_template[MAX_LIST_RECURSION];
-};
-
 
 
 #endif  // ESP8266__HTTP_SERVER__H

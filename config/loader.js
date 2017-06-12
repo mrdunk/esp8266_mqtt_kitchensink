@@ -14,7 +14,8 @@ var Loader =
     this.requestData();
     this.loadFile(this.selected_file);
     this.loadFilenames();
-    ws_receive_callbacks.push(function(path){context.insertContent(path);});
+    ws_receive_callbacks.push(
+        function loader_rx_callback(path){context.insertContent(path);});
   },
 
   hashChange: function(){
@@ -98,7 +99,7 @@ var Loader =
     }
   },
 
-  insertContent: function(path){
+  insertContent: function(){
     if(this.insert_content_timer !== undefined &&
         (Date.now() - this.insert_content_timer < 1000))
     {
@@ -137,7 +138,7 @@ var Loader =
       div.innerHTML = content;
       container.appendChild(div);
     } 
-    if(true){
+    if(false){
       for(var i=0; i < new_lines.length; i++){
         var text = document.createTextNode(new_lines[i]);
         container.appendChild(text);
@@ -159,7 +160,6 @@ var Loader =
         }
         var p = path[i];
         if(path[i].endsWith("_path")){
-          console.log(path[i].lastIndexOf("_"), path[i].substring(0, path[i].lastIndexOf("_")));
           p = path[i].substring(0, path[i].lastIndexOf("_"));
         }
         pointer = pointer[p];
@@ -190,7 +190,7 @@ var Loader =
       var child = children[i];
 
       path = this.getFullPath(parent_path, child.name);
-      console.log(i, parent_path, child.name.split("."), path, child.type);
+      //console.log(i, parent_path, child.name.split("."), path, child.type);
 
       var this_line = child.line;
       for(var l = last_line; l < this_line; l++){
@@ -236,7 +236,7 @@ var Loader =
           }
         }
         for(var c=0; c < grand_children.length; c++){
-          console.log(c, ws_data);
+          //console.log(c, ws_data);
           var child_last_line = last_line;
           var child_last_pos = last_pos;
 
