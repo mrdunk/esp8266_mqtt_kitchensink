@@ -348,9 +348,15 @@ var Loader =
           }
         }
       }
-      if(elements[i].value !== undefined && valueAtPath(name) !== undefined && 
-          elements[i].value !== valueAtPath(name)){
-        console.log(name, elements[i].value, valueAtPath(name));
+        
+      var value = elements[i].value;
+      if(elements[i].type === "checkbox"){
+        value = 1 * elements[i].checked;
+      }
+
+      if(value !== undefined && valueAtPath(name) !== undefined && 
+          "" + value !== valueAtPath(name))
+      {
         var topic;
         try {
           topic = ws_data.host.mqtt.publish_prefix;
@@ -362,8 +368,9 @@ var Loader =
         var summary = {_subject: topic,
                        _command: "update",
                        path: name,
-                       value: elements[i].value};
+                       value: value};
         wsQueueSend(summary);
+        console.log(name, valueAtPath(name), value, elements[i].type);
       }
     }
   }

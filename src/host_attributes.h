@@ -57,8 +57,8 @@ struct Config {
   bool testValue(const String& parent,
                  const String& key);
   void clear();
-  bool load(const String& filename="/config.cfg", bool test=false);
-  bool save(const String& filename="/config.cfg");
+  bool load2(const String& filename="/config3.cfg", bool test=false);
+  bool save2(const String& filename="/config3.cfg");
   void insertDevice(Connected_device device);
 
   int labelToIndex(const int label){
@@ -80,7 +80,8 @@ struct Config {
     return -1;
   }
 
-  bool save2(const String& filename="/config2.cfg");
+  bool save(const String& filename="/config.cfg");
+  bool load(const String& filename="/config2.cfg");
 }; 
 
 

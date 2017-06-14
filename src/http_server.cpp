@@ -290,7 +290,8 @@ void HttpServer::loop(){
 
 void HttpServer::onTest(){
   bufferAppend(" testing ");
-  config->save2();
+  config->load2();
+  //config->save2();
   bufferAppend(" testing. ");
   esp8266_http_server.send(200, "text/plain", buffer);
 }

@@ -24,7 +24,7 @@
 
 
 // Reset if unable to connect to WiFi after this many seconds.
-#define RESET_ON_CONNECT_FAIL 60
+#define RESET_ON_CONNECT_FAIL 20
 
 // Maximum number of devices connected to IO pins.
 #define MAX_DEVICES 4

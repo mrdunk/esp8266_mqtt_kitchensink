@@ -132,7 +132,6 @@ void DeviceAddressSet(Connected_device& device, const String& address){
     char* address_section = device.address_segment[segment].segment;
     address.substring(address_tail, address_head -1).toCharArray(address_section, NAME_LEN);
     sanitizeTopicSection(address_section);
-    Serial.println(address_section);
     address_tail = address_head;
     segment++;
   }

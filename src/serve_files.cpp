@@ -87,7 +87,7 @@ bool getPage(const String& filename, File& file, const Config& config) {
         }
 
         Serial.print("+");
-	      file.println(line);
+	      file.print(line);
         Serial.print("-");
       }
     }

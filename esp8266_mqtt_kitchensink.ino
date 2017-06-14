@@ -180,23 +180,34 @@ bool pullFirmware(){
 }
 
 
-void setup_network(void) {
+void setup_network_1(void) {
   //Serial.setDebugOutput(true);
- 
-  if(WiFi.SSID() != ssid || WiFi.psk() != pass){
-    Serial.println("Reassigning WiFi username and password.");
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, pass);
+
+  WiFi.persistent(false);
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    if(WiFi.SSID() != ssid || WiFi.psk() != pass){
+      Serial.println("Reassigning WiFi username and password.");
+
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid, pass);
+    }
   }
+
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
- 
+}
+
+void setup_network_2(void) { 
   if(config.ip != IPAddress(0,0,0,0) && config.subnet != IPAddress(0,0,0,0)){
+    //Serial.println(config.ip);
+    //Serial.println(config.gateway);
+    //Serial.println(config.subnet);
     WiFi.config(config.ip, config.gateway, config.subnet);
   }
 
   // Wait for connection
-  int timer = RESET_ON_CONNECT_FAIL * 10;
+  int timer = RESET_ON_CONNECT_FAIL * 100;
   while (WiFi.status() != WL_CONNECTED){
     delay(10);
     if(timer % 100 == 0){
@@ -204,6 +215,7 @@ void setup_network(void) {
     }
     if(timer-- == 0){
       timer = RESET_ON_CONNECT_FAIL;
+      Serial.println("ESP.reset() due to NW config timeout");
       ESP.reset();
       Serial.println();
     }
@@ -219,7 +231,6 @@ void setup_network(void) {
     brokers.RegisterMDns(&my_mdns);
 
     webSocket.begin();
-    //webSocket.onEvent(webSocketEvent);
   }
 }
 
@@ -231,19 +242,21 @@ void configInterrupt(){
 
 void setup(void) {
   Serial.begin(115200);
-  delay(10);
   Serial.println();
   Serial.println("Reset.");
   Serial.println();
 
-  if(config.load("/config.cfg", true)){
-    config.load("/config.cfg");
-	}
+  //if(config.load2("/config.cfg", true)){
+  //  config.load2("/config.cfg");
+	//}
+  config.load("/config2.cfg");
+    
+  setup_network_1();
+  setup_network_2();
 
   if(testPullFirmware()){
     Serial.println("Pull Firmware mode!!");
   } else {
-
     // Do IO setup early in case an IO pin needs to hold power to esp8266 on.
     pinMode(config.enableiopin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(config.enableiopin), configInterrupt, CHANGE);
@@ -264,7 +277,7 @@ void setup(void) {
 
 void loop(void) {
   if (WiFi.status() != WL_CONNECTED) {
-    setup_network();
+    setup_network_2();
   }
 
   if(testPullFirmware()){

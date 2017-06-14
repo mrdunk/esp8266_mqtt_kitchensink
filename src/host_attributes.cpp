@@ -291,7 +291,7 @@ bool Config::setValue(const String& parent,
   return false;
 }
 
-bool Config::load(const String& filename, bool test){
+bool Config::load2(const String& filename, bool test){
   if(!test){
     clear();
   }
@@ -378,13 +378,117 @@ bool Config::load(const String& filename, bool test){
       return false;
     }
   }
-
+  
   file.close();
   SPIFFS.end();
   return !error;
 }
 
+void assemblePathObject(JsonObject& json_object, String& path);
+
+void assemblePathArray(JsonArray& json_object, String& path){
+  uint8_t counter = 0;
+  String path_backup = path;
+  for (auto dataobj : json_object){
+    path = path_backup;
+    path += counter++;
+    path += ".";
+
+    if(dataobj.is<char*>()){
+      //Serial.println(path);
+      //Serial.print("\t: ");
+      //Serial.println(dataobj.as<char*>());
+      TagBase* tag = tag_itterator.getByPath(path);
+      if(tag != nullptr && tag->configurable){
+        tag->contentsSave(dataobj.as<char*>());
+      }
+    } else if(dataobj.is<JsonArray>()){
+      assemblePathArray(dataobj, path);
+    } else {
+      assemblePathObject(dataobj, path);
+    }
+  }
+  path = path_backup;
+}
+
+void assemblePathObject(JsonObject& json_object, String& path){
+  String path_backup = path;
+  for (auto dataobj : json_object){
+    path = path_backup;
+    path += dataobj.key;
+    path += ".";
+
+    if(dataobj.value.is<char*>()){
+      //Serial.print(path);
+      //Serial.print("\t: ");
+      //Serial.println(dataobj.value.as<char*>());
+      TagBase* tag = tag_itterator.getByPath(path);
+      if(tag != nullptr && tag->configurable){
+        tag->contentsSave(dataobj.value.as<char*>());
+      }
+    } else if(dataobj.value.is<JsonArray>()){
+      assemblePathArray(dataobj.value, path);
+    } else {
+      assemblePathObject(dataobj.value, path);
+    }
+  }
+  path = path_backup;
+}
+
+bool Config::load(const String& filename){
+  //Serial.print("Config::load(");
+  //Serial.print(filename);
+  //Serial.println(")");
+
+  bool result = SPIFFS.begin();
+  if(!result){
+    Serial.println("Unable to use SPIFFS.");
+    SPIFFS.end();
+    return false;
+  }
+
+  // this opens the file in read-mode
+  File file = SPIFFS.open(filename, "r");
+
+  if (!file) {
+    Serial.print("File doesn't exist: ");
+    Serial.println(filename);
+    SPIFFS.end();
+    return false;
+  }
+
+  String line;
+  String l;
+  while(file.available()) {
+      l = file.readStringUntil('\n');
+      l.trim();
+      line += l;
+  }
+
+  file.close();
+  SPIFFS.end();
+
+  StaticJsonBuffer<1500> jsonBuffer;
+  //DynamicJsonBuffer jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(line);
+  if(!root.success()) {
+    Serial.println("parseObject() failed");
+    return false;
+  }
+  //Serial.println("parseObject() success");
+  String path;
+  assemblePathObject(root, path);
+
+  //root.prettyPrintTo(line);
+  //Serial.print(line);
+  return true;
+}
+
 bool Config::save(const String& filename){
+	Serial.print("Config::save(");
+  Serial.print("filename");
+  Serial.println(")");
+
 	bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
@@ -512,7 +616,11 @@ bool Config::save(const String& filename){
 }
 
 bool Config::save2(const String& filename){
-	bool result = SPIFFS.begin();
+	Serial.print("Config::save2(");
+  Serial.print("filename");
+  Serial.println(")");
+
+  bool result = SPIFFS.begin();
   if(!result){
 		Serial.println("Unable to use SPIFFS.");
     SPIFFS.end();
@@ -529,19 +637,15 @@ bool Config::save2(const String& filename){
 	}
   Serial.println(filename);
   file.close();
+  SPIFFS.end();
 
-	// open the file in write mode
-	file = SPIFFS.open(filename, "w");
-	if (!file) {
-		Serial.println("file creation failed");
-    SPIFFS.end();
-		return false;
-	}
+  String out_buffer;
+  out_buffer.reserve(1000);
 
   TagBase* path[MAX_TAG_RECURSION] = {nullptr};
   TagBase* path_last[MAX_TAG_RECURSION] = {nullptr};
-  uint8_t list_count[MAX_TAG_RECURSION] = {0};
   uint8_t depth = 0;
+
   tag_itterator.reset();
   while(true){
     TagBase* tag = tag_itterator.loop(&depth);
@@ -556,13 +660,19 @@ bool Config::save2(const String& filename){
 
       for(int8_t i = MAX_TAG_RECURSION -1; i >= 0; i--){
         if(path[i] != path_last[i] && path_last[i] != nullptr){
-          if(path_last[i]->children_len > 0){
-            for(uint8_t j=0; j < i; j++){file.print("  ");}
-            file.println("},");
+          if(path_last[i]->children_len > 0 && path_last[i]->direct_value == false){
+            if(out_buffer.endsWith(",\n")){
+              out_buffer.remove(out_buffer.length() -2, 1);
+            }
+            for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+            out_buffer.concat("},\n");
           }
           if(path_last[i]->contentCount() > 0 && path_last[i]->direct_value == false){
-            for(uint8_t j=0; j < i; j++){file.print("  ");}
-            file.println("],");
+            if(out_buffer.endsWith(",\n")){
+              out_buffer.remove(out_buffer.length() -2, 1);
+            }
+            for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+            out_buffer.concat("],\n");
           }
         }
       }
@@ -573,22 +683,39 @@ bool Config::save2(const String& filename){
 
       for(uint8_t i = 0; i < MAX_TAG_RECURSION; i++){
         if(path[i] != nullptr && path[i] != path_last[i]){
-          for(uint8_t j=0; j < i; j++){file.print("  ");}
-          file.print(path[i]->name);
-          if(path[i]->contentCount() > 0 && path[i]->direct_value == false){
-            for(uint8_t j=0; j < i; j++){file.print("  ");}
-            file.println(" : [");
+          if(path[i] != nullptr && path_last[i] != nullptr &&
+              path[i]->sequence != path_last[i]->sequence)
+          {
+            // Changed list elements.
+            if(out_buffer.endsWith(",\n")){
+              out_buffer.remove(out_buffer.length() -2, 1);
+            }
+            for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+            out_buffer.concat("},{\n");
           }
-          if(path[i]->children_len > 0){
-            for(uint8_t j=0; j < i; j++){file.print("  ");}
-            file.println(" : {");
+
+          for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+          if(strcmp(path[i]->name, "root") != 0){
+            out_buffer.concat("\"");
+            out_buffer.concat(path[i]->name);
+            out_buffer.concat("\":");
+          }
+
+          if(path[i]->contentCount() > 0 && path[i]->direct_value == false){
+            for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+            out_buffer.concat(" [ ");
+          }
+
+          if(path[i]->children_len > 0 && path[i]->direct_value == false){
+            //for(uint8_t j=0; j < i; j++){out_buffer.concat("  ");}
+            out_buffer.concat(" {\n");
           } else {
             String content;
             int value;
             path[i]->contentsAt(path[i]->sequence, content, value);
-            file.print(" : \"");
-            file.print(content);
-            file.println("\", ");
+            out_buffer.concat(" \"");
+            out_buffer.concat(content);
+            out_buffer.concat("\",\n");
           }
         }
       }
@@ -598,6 +725,21 @@ bool Config::save2(const String& filename){
       }
     }
   }
+  if(out_buffer.endsWith(",\n")){
+    out_buffer.remove(out_buffer.length() -2, 1);
+  }
+
+	// open the file in write mode
+	result = SPIFFS.begin();
+	file = SPIFFS.open(filename, "w");
+	if (!file) {
+		Serial.println("file creation failed");
+    SPIFFS.end();
+		return false;
+	}
+
+  file.println(out_buffer);
+  //file.println(out_buffer.length());
 
   file.close();
   Serial.println("Done saving config file.");
