@@ -55,7 +55,7 @@ class TagBase{
     return false;
   }
 
-  bool contentsSaveWrapper(const String& content){
+  /*bool contentsSaveWrapper(const String& content){
     bool return_val = contentsSave(content);
     if(return_val){
       config->save();
@@ -66,7 +66,7 @@ class TagBase{
       io->setup();
     }
     return return_val;
-  }
+  }*/
 
   virtual bool contentsSave(const String& /*content*/){
     configurable = false;

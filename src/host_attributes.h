@@ -50,15 +50,7 @@ struct Config {
 
   bool sessionValid();
   bool sessionExpired();
-  bool setValue(const String& parent,
-                const String& key,
-                const String& value,
-                Connected_device& device);
-  bool testValue(const String& parent,
-                 const String& key);
   void clear();
-  bool load2(const String& filename="/config3.cfg", bool test=false);
-  bool save2(const String& filename="/config3.cfg");
   void insertDevice(Connected_device device);
 
   int labelToIndex(const int label){
@@ -90,13 +82,6 @@ void sanitizeHostname(char* buffer);
 
 void SetHostname(const char* new_hostname);
 
-// The URL to an HTTP server where firmware can be pulled from.
-void SetFirmwareServer(const char* new_fws, char* dest_buffer);
-
-bool enterList(String& input, bool& inside_list, int& list_index,
-               int& current_level);
-bool enterSubSet(String& input, int& level);
-bool getKeyValue(String& input, String& key, String& value);
 
 // Ensure buffer contains only valid filename characters.
 bool sanitizeFilePath(const String& buffer);

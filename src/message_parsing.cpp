@@ -215,7 +215,11 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       String path = valueFromStringPayload(payload, "path");
       String value = valueFromStringPayload(payload, "value");
       TagBase* tag = tag_itterator.getByPath(path);
-      tag->contentsSaveWrapper(value);
+      tag->contentsSave(value);
+      tag->sendData(callback);
+      config->save();  // TODO: Batch these so it does not happen every time.
+      // TODO: Perform setup on IO if it's settings change.
+
     } else if(command == "learn"){
     }
   }

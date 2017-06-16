@@ -290,8 +290,6 @@ void HttpServer::loop(){
 
 void HttpServer::onTest(){
   bufferAppend(" testing ");
-  config->load2();
-  //config->save2();
   bufferAppend(" testing. ");
   esp8266_http_server.send(200, "text/plain", buffer);
 }
@@ -332,10 +330,11 @@ void HttpServer::onFileOperations(const String& _filename){
       Serial.print("Pull file from server: ");
       Serial.println(filename);
 
-      bufferAppend("Pulling firmware from " +
+      bufferAppend("Pulling file from " +
           String(config->firmwarehost) + ":" + String(config->firmwareport) +
           String(config->firmwaredirectory) + filename + "\n");
       if(filename == "firmware.bin"){
+        bufferAppend("Firmware file.\n");
         esp8266_http_server.send(200, "text/plain", buffer);
         // Set flag in persistent filesystem and reboot so we pull new firmware on
         // next boot.

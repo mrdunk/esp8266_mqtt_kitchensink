@@ -199,7 +199,9 @@ function wsStart(){
                 container[name] = [];
               }
             }
-          } else if(container[name] === undefined){
+          } else if(container[name] === undefined ||
+              typeof(container[name]) === "string")
+          {
             container[name] = payload.content;
           }
 

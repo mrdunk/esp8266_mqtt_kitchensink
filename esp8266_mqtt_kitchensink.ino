@@ -179,34 +179,7 @@ bool pullFirmware(){
   return false;
 }
 
-
-void setup_network_1(void) {
-  //Serial.setDebugOutput(true);
-
-  WiFi.persistent(false);
-  
-  if (WiFi.status() != WL_CONNECTED) {
-    if(WiFi.SSID() != ssid || WiFi.psk() != pass){
-      Serial.println("Reassigning WiFi username and password.");
-
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(ssid, pass);
-    }
-  }
-
-  WiFi.setAutoConnect(true);
-  WiFi.setAutoReconnect(true);
-}
-
-void setup_network_2(void) { 
-  if(config.ip != IPAddress(0,0,0,0) && config.subnet != IPAddress(0,0,0,0)){
-    //Serial.println(config.ip);
-    //Serial.println(config.gateway);
-    //Serial.println(config.subnet);
-    WiFi.config(config.ip, config.gateway, config.subnet);
-  }
-
-  // Wait for connection
+void waitForNetwork(){
   int timer = RESET_ON_CONNECT_FAIL * 100;
   while (WiFi.status() != WL_CONNECTED){
     delay(10);
@@ -220,11 +193,44 @@ void setup_network_2(void) {
       Serial.println();
     }
   }
+}
+
+void setup_network(void) {
+  //Serial.setDebugOutput(true);
+
+  WiFi.setAutoConnect(true);
+  WiFi.setAutoReconnect(true);
+
+  if(config.ip != IPAddress(0, 0, 0, 0)){
+    Serial.println("Setting NW settings.");
+    Serial.println(config.ip);
+    Serial.println(config.subnet);
+    Serial.println(config.gateway);
+    WiFi.config(config.ip, config.gateway, config.subnet);
+  } else {
+    Serial.println("Using DHCP for NW settings.");
+  }
+
+  if(WiFi.SSID() != ssid || WiFi.psk() != pass){
+    //WiFi.disconnect();
+
+    Serial.println("Reassigning WiFi username and password.");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, pass);
+
+  }
+
+  waitForNetwork();
+
   Serial.println("");
   Serial.print("Connected to: ");
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  Serial.print("Subnetmask: ");
+  Serial.println(WiFi.subnetMask());
+  Serial.print("Gateway address: ");
+  Serial.println(WiFi.gatewayIP());
 
   if(!testPullFirmware()){
     brokers.InsertManual("broker_hint", config.brokerip, config.brokerport);
@@ -246,13 +252,9 @@ void setup(void) {
   Serial.println("Reset.");
   Serial.println();
 
-  //if(config.load2("/config.cfg", true)){
-  //  config.load2("/config.cfg");
-	//}
-  config.load("/config2.cfg");
+  config.load("/config.cfg");
     
-  setup_network_1();
-  setup_network_2();
+  setup_network();
 
   if(testPullFirmware()){
     Serial.println("Pull Firmware mode!!");
@@ -277,7 +279,7 @@ void setup(void) {
 
 void loop(void) {
   if (WiFi.status() != WL_CONNECTED) {
-    setup_network_2();
+    setup_network();
   }
 
   if(testPullFirmware()){
