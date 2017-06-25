@@ -55,6 +55,7 @@ class HttpServer{
   void onRoot();
   void onReset();
   void onFileOperations(const String& _filename = "");
+  void onErase();
   void onPullFileMenu();
   void onLogin();
   void onNotFound();

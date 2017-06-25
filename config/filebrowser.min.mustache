@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<head>
+<link rel="stylesheet" href="style.css">
+<script src=""></script>
+</head>
+<body>
+{{^session.valid}}
+<form action='/login' method='POST'>To log in, please use : admin/admin<br>
+User:<input type='text' name='USERNAME' placeholder='user name'><br>
+Password:<input type='password' name='PASSWORD' placeholder='password'><br>
+<input type='submit' name='SUBMIT' value='Login'>
+</form>
+{{/session.valid}}
+{{#session.valid}}
+<form action='/login' method='POST'>
+<input type='submit' name='DISCONNECT' value='Logout'>
+</form>
+{{/session.valid}}
+
+<table>
+<tr>
+<th>name</th>
+<th>size</th>
+<th></th>
+{{#session.valid}}
+<th></th>
+<th></th>
+{{/session.valid}}
+</tr>
+{{#fs.files}}
+<tr>
+<td><a href="get?filename={{filename}}">{{filename}}</a></td>
+<td>{{size}}</td>
+<td>
+{{#is_mustache}}
+<a href="get?filename={{filename}}&action=raw">raw</a>
+{{/is_mustache}}
+</td>
+{{#session.valid}}
+<td><a href="get?filename={{filename}}&action=pull">pull</a></td>
+<td><a href="get?filename={{filename}}&action=del">del</a></td>
+{{/session.valid}}
+</tr>
+{{/fs.files}}
+{{#session.valid}}
+<form action='/get' method='POST' id='new_file'>
+<input type="hidden" name="action" value="pull">
+</form>
+<tr>
+<td><input type='text' name='filename' placeholder='new filename' form='new_file'></td>
+<td></td>
+<td></td>
+<td><a href="#" onclick="document.getElementById('new_file').submit();">pull</a></td>
+<td></td>
+</tr>
+{{/session.valid}}
+</table>
+<table>
+<tr>
+<th>Space:</th>
+<th>Total</th>
+<th>Used</th>
+<th>Free</th>
+</tr>
+<tr>
+<td></td>
+<td>{{fs.space.size}}</td>
+<td>{{fs.space.used}}&nbsp;&nbsp({{fs.space.ratio_used}})</td>
+<td>{{fs.space.remaining}}&nbsp;&nbsp({{fs.space.ratio_remaining}})</td>
+</tr>
+</table>
+</body>
+</html>
+

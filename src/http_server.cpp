@@ -55,18 +55,26 @@ HttpServer::HttpServer(char* _buffer,
   esp8266_http_server.on("/get", [&]() {onFileOperations();});
   esp8266_http_server.on("/pull", [&]() {onPullFileMenu();});
   esp8266_http_server.on("/login", [&]() {onLogin();});
+  esp8266_http_server.on("/erase", [&]() {onErase();});
   // /filenames.sys provides a list of filenames in flash and is used by the
   // loader.html file menu.
   esp8266_http_server.on("/filenames.sys", [&]() {fileBrowser(true);});
   esp8266_http_server.onNotFound([&]() {onNotFound();});
 
-  const char * headerkeys[] = {"User-Agent", "Cookie", "Referer"} ;
+  const char * headerkeys[] = {"User-Agent", "Cookie", "Referer", "Location"} ;
   size_t headerkeyssize = sizeof(headerkeys)/sizeof(char*);
   //ask server to track these headers
   esp8266_http_server.collectHeaders(headerkeys, headerkeyssize);
 
   esp8266_http_server.begin();
   bufferClear();
+}
+
+void HttpServer::onErase(){
+  Serial.println("HttpServer.onErase()");
+  // TODO: Authenticate.
+  esp8266_http_server.send(200, "text/plain", "Erasing Flash.");
+  SPIFFS.format();
 }
 
 void HttpServer::onPullFileMenu(){
@@ -215,17 +223,26 @@ bool HttpServer::isAuthentified(bool redirect){
 
 //login page, also called for disconnect
 void HttpServer::onLogin(){
+  Serial.println();
   Serial.println("onLogin()");
   
-  if(isAuthentified()){
-    esp8266_http_server.send(200, "text/plain", "logged in");
-  }
-
   String msg;
   String action("/login");
 
+  Serial.println(esp8266_http_server.header("Referer"));
+  Serial.println(esp8266_http_server.arg("REFERER"));
+  //if(esp8266_http_server.hasArg("REFERER")){
+  //  action = esp8266_http_server.arg("REFERER");
   if(esp8266_http_server.header("Referer")){
     action = esp8266_http_server.header("Referer");
+    Serial.print("Referer: ");
+    Serial.println(action);
+  }
+
+  if(isAuthentified(false)){
+    esp8266_http_server.sendHeader("Location", action);
+    esp8266_http_server.send(200, "text/plain", "logged in");
+    return;
   }
 
   if (esp8266_http_server.hasHeader("Cookie")){
@@ -264,13 +281,21 @@ void HttpServer::onLogin(){
       config->session_time = millis() / 1000;
 
       esp8266_http_server.sendHeader("Location", action);
+
       esp8266_http_server.sendHeader("Cache-Control","no-cache");
+      
       String cookie_header("ESPSESSIONID=");
       cookie_header += config->session_token;
       config->session_token_provided = config->session_token;
       esp8266_http_server.sendHeader("Set-Cookie", cookie_header);
+      Serial.print("Set-Cookie: ");
+      Serial.println(cookie_header);
+
       esp8266_http_server.send(301);
-      Serial.println("Log in Successful");
+
+      Serial.print("Log in Successful. Redirecting to \"");
+      Serial.print(action);
+      Serial.println("\".");
       return;
     }
     msg = "Wrong username/password! try again.";
@@ -300,7 +325,7 @@ void  HttpServer::onRoot(){
 
 void HttpServer::onReset() {
   esp8266_http_server.send(200, "text/plain", "restarting host");
-  Serial.println("restarting host");
+  Serial.println("HttpServer::onReset()");
   delay(100);
   ESP.reset();
 }
@@ -387,9 +412,21 @@ void HttpServer::onFileOperations(const String& _filename){
       Serial.print(filename);
       
       if(!fileOpen(filename)){
-        bufferAppend("\nUnsuccessful.\n");
-        esp8266_http_server.send(404, "text/plain", buffer);
-        return;
+        String tmp_filename = filename.substring(0, filename.lastIndexOf('.') +1);
+        tmp_filename += "min.";
+        tmp_filename += filename.substring(filename.lastIndexOf('.') +1);
+        filename = tmp_filename;
+        
+        Serial.print(" Trying: ");
+        Serial.print(filename);
+
+        if(!fileOpen(filename)){
+          bufferAppend("\nUnsuccessful.\n");
+          esp8266_http_server.send(404, "text/plain", buffer);
+          return;
+        } else {
+          Serial.print("\n Sucess.");
+        }
       }
       
       String mime_type = mime(filename);
@@ -417,6 +454,7 @@ void HttpServer::onFileOperations(const String& _filename){
 }
 
 void HttpServer::fileBrowser(bool names_only){
+  bufferClear();
   if(!SPIFFS.begin()){
     Serial.println("WARNING: Unable to SPIFFS.begin()");
     return;
@@ -459,7 +497,7 @@ bool HttpServer::fileOpen(const String& filename){
 	file = SPIFFS.open("/" + filename, "r");
 
 	if (!file) {
-		Serial.print("File doesn't exist: ");
+		Serial.print("\n File doesn't exist: ");
     Serial.println(filename);
     bufferAppend("File doesn't exist: " + filename);
 

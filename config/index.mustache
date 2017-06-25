@@ -61,7 +61,11 @@
       </tr>
   
       {{#servers.mqtt}} 
-      <tr{{#active}} class="highlight"{{/active}}>
+      <tr 
+{{#active}} 
+class="highlight"
+{{/active}}
+>
           <td>{{active}}</td>
           <td>{{service_name}}</td>
           <td>{{host_name}}</td>

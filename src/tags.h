@@ -34,7 +34,7 @@
 #include "mdns_actions.h"
 
 
-#define MAX_TAG_RECURSION 6
+#define MAX_TAG_RECURSION 10
 
 #define COMMON_DEF Config* _config, MdnsLookup* _brokers, mdns::MDns* _mdns, Mqtt* _mqtt, Io* _io
 
@@ -54,19 +54,6 @@ class TagBase{
     value = 0;
     return false;
   }
-
-  /*bool contentsSaveWrapper(const String& content){
-    bool return_val = contentsSave(content);
-    if(return_val){
-      config->save();
-
-      // Force reconnect to MQTT so we subscribe to any new addresses.
-      // TODO: only do this if io has changed.
-      mqtt->forceDisconnect();
-      io->setup();
-    }
-    return return_val;
-  }*/
 
   virtual bool contentsSave(const String& /*content*/){
     configurable = false;
@@ -1138,9 +1125,15 @@ class TagServersMqttActive : public TagBase{
     brokers->SetIterater(index);
     brokers->GetLastHost(&p_host, active);
     content = (active ? "Y":"N");
-    value = active; 
+    value = active;
     return (index < parent->contentCount() -1);
   }
+  //uint8_t contentCount(){
+    //if(){
+    //  return 1;
+    //}
+    //return 0;
+  //}
 };
 
 class TagServersMqttServicename : public TagBase{

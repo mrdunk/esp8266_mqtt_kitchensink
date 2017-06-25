@@ -1,0 +1,10 @@
+<dl>
+<dt>MAC address</dt><dd>{{host.mac}}</dd> <dt>Hostname</dt><dd>{{host.hostname}}</dd> <dt>Active IP address</dt><dd>{{host.nw.address}}</dd> <dt>Configured IP address</dt><dd>{{host.nwconfigured.address}}</dd> <dt>&nbsp</dt><dd>&nbsp</dd>
+<dt>session.overrideauth</dt> <dd>{{session.overrideauth}}</dd> <dt>session.validuntil</dt> <dd>{{session.validuntil}}&nbsp&nbsp(now:{{host.core.uptime}})</dd> <dt>session.valid</dt> <dd>{{session.valid}}</dd> <dt>&nbsp</dt><dd>&nbsp</dd>
+<dt>WiFI RSSI</dt><dd>{{host.rssi}}</dd>{{#host.ssids}}<dt>WiFi SSID</dt><dd>{{name}}&nbsp&nbsp&nbsp({{signal}})</dd>{{/host.ssids}}
+{{^host.ssids}}<dt>WiFi SSID</dt><dd>No WiFI networks found.</dd>{{/host.ssids}}
+<dt>&nbsp</dt><dd>&nbsp</dd>
+<dt>Uptime</dt><dd>{{host.core.uptime}}</dd> <dt>&nbsp</dt><dd>&nbsp</dd> <dt>Brokers</dt><dd>
+<table> <tr class=""> <th></th> <th>service_name</th> <th>hostname</th> <th>ip</th> <th>port</th> <th>service valid until</th> <th>host valid until</th> <th>ipv4 valid until</th> <th>success rate</th> </tr> {{#servers.mqtt}} <tr {{#active}} class="highlight"{{/active}}> <td>{{active}}</td> <td>{{service_name}}</td> <td>{{host_name}}</td> <td>{{address}}</td> <td>{{port}}</td> <td>{{service_valid_until}}</td> <td>{{host_valid_until}}</td> <td>{{address_valid_until}}</td> <td>{{success_counter}}/{{connection_attempts}}</td> </tr> {{/servers.mqtt}} </table>
+</dd> <dt>&nbsp</dt><dd>&nbsp</dd> <dt>mDNS decode success rate</dt> <dd>{{mdns.buffer_success}}/{{mdns.packet_count}}&nbsp&nbsp&nbsp{{mdns.success_rate}}</dd> <dt>Largest mDNS packet size</dt> <dd>{{mdns.largest_packet}}/{{host.buffer_size}}bytes</dd>
+</dl>

@@ -271,7 +271,7 @@ bool Config::load(const String& filename){
 
 bool Config::save(const String& filename){
 	Serial.print("Config::save(");
-  Serial.print("filename");
+  Serial.print(filename);
   Serial.println(")");
 
   bool result = SPIFFS.begin();
@@ -392,12 +392,13 @@ bool Config::save(const String& filename){
 		return false;
 	}
 
-  file.println(out_buffer);
-  //file.println(out_buffer.length());
+  if(file.println(out_buffer) < 3){
+    Serial.println("Failed saving config file.");
+  } else {
+    Serial.println("Done saving config file.");
+  }
 
   file.close();
-  Serial.println("Done saving config file.");
-
   SPIFFS.end();
   return true;
 }

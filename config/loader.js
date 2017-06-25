@@ -48,10 +48,12 @@ var Loader =
   fileCallback: function(inner_context, outer_context, filename){
     if(filename === "filenames.sys"){
       var container = document.getElementById("files");
+      container.innerHTML = "";
       var names = inner_context.responseText.split("\r\n");
       for(var i = 0; i < names.length; i++){
         var filename = names[i];
-        if(filename.split(".")[1] === "mustache"){
+        var filename_split = filename.split(".");
+        if(filename_split[filename_split.length -1] === "mustache"){
           var element = document.createElement("a");
           var text = document.createTextNode(filename);
           element.appendChild(text);
@@ -89,7 +91,8 @@ var Loader =
     var load_timers = 0;
     for(var i = 0; i < names.length; i++){
       var filename = names[i];
-      if(filename.split(".")[1] === "mustache"){
+      var filename_split = filename.split(".");
+      if(filename_split[filename_split.length -1] === "mustache"){
         if(this.files[filename].raw === undefined){
           var context = this;
           load_timers++;
@@ -220,7 +223,8 @@ var Loader =
         var grand_children = this.tagContent(path, index);
         if(grand_children instanceof Array){
           // pass
-        } else if(grand_children === "0" || grand_children === ""){
+        } else if(grand_children === "0" || grand_children === "" ||
+            grand_children === "n" || grand_children === "N"){
           grand_children = [];
         } else {
           grand_children = [true];
@@ -235,7 +239,7 @@ var Loader =
             last.pos = next_child.pos;
           }
         }
-        for(var c=0; c < grand_children.length; c++){
+        for(var c=0; c < grand_children.length ; c++){
           //console.log(c, ws_data);
           var child_last_line = last_line;
           var child_last_pos = last_pos;

@@ -62,7 +62,7 @@ var Parser =
      structure.*/
   parse : function(template){
     var lines = template.split('\n');
-    for(var i = 0;i < lines.length;i++){
+    for(var i = 0; i < lines.length; i++){
       var line = lines[i];
 
       if(line.trim() !== ""){
