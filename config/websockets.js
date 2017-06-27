@@ -175,6 +175,8 @@ function wsStart(){
       updatePage(payload);
       if(payload._command === "teach"){
         //console.log("websocket.onmessage", payload);
+
+        // Remove Incoming message if it is a reply to one in the send queue.
         wsDeQueue(payload);
 
         var container = ws_data;
@@ -223,6 +225,12 @@ function wsStart(){
         for(var j = 0; j < ws_receive_callbacks.length; j++){
           ws_receive_callbacks[j](path);
         }
+
+        var message = {_command: "ack",
+                       path : payload.name,
+                       id: payload.id,
+                       _subject: "hosts/_all"};
+        wsQueueSend(message);
       }
     }
   };
@@ -319,7 +327,9 @@ function wsSend(){
       log.innerHTML += "<p style='color: green;'>> WS publish: " +
                        JSON.stringify(popped) + "</p>";
     }
-    if(popped._command !== "learn"){
+
+    // Leave "learn" and "update" requests in the send buffer until a reply arrives.
+    if(popped._command !== "learn" && popped._command !== "update"){
       wsDeQueue(popped);
     }
   }catch(err){

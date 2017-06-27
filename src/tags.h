@@ -40,9 +40,10 @@
 
 #define COMMON_PERAMS _config, _brokers, _mdns, _mqtt, _io
 
-#define COMMON_ALLOCATE config(_config), brokers(_brokers), mdns(_mdns), mqtt(_mqtt), io(_io), base_children(_base_children), parent(NULL), children_len(_children_len)
+#define COMMON_ALLOCATE config(_config), brokers(_brokers), mdns(_mdns), mqtt(_mqtt), io(_io), base_children(_base_children), parent(NULL), children_len(_children_len), id(0)
 
 #define CHILDREN_LEN (sizeof(children)/sizeof(children[0]))
+
 
 class TagBase{
  public:
@@ -104,22 +105,22 @@ class TagBase{
   bool sendData(std::function< void(String&, String&) > callback){
     String content;
     int value;
-    //DynamicJsonBuffer jsonBuffer;
-    StaticJsonBuffer<150> jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
-    root["name"] = getPath();
-    root["_command"] = "teach";
-
-    bool return_val = contentsAt(sequence, content, value);
+    contentsAt(sequence, content, value);
 
     if(content == "" && (parent == nullptr || parent->contentCount() == 0)){
-      return true;
+      return false;
     }
-
+    
     if(content == ""){
       content = "_";
     }
 
+    //DynamicJsonBuffer jsonBuffer;
+    StaticJsonBuffer<150> jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    root["name"] = getPath();
+    root["id"] = id;
+    root["_command"] = "teach";
     root["content"] = content;
     root["value"] = value;
     root["sequence"] = sequence;
@@ -133,7 +134,7 @@ class TagBase{
 
     callback(host_topic, host_payload);
 
-    return return_val;
+    return true;
   }
 
  protected:
@@ -146,11 +147,13 @@ class TagBase{
   TagBase* parent;
  public:
   const uint8_t children_len;
+  uint16_t id;
   const char* name;
   uint8_t sequence;
   bool configurable;
   bool direct_value;
 };
+
 
 class TagUiIopinValue : public TagBase{
  public:
@@ -1848,7 +1851,9 @@ class TagItterator{
     count[0] = 0;
     last_loop = false;
     for(uint8_t i = 1; i < MAX_TAG_RECURSION; i++){
-      tag[i] = nullptr;
+      if(tag[i] != nullptr){
+        tag[i] = nullptr;
+      }
       count[i] = 0;
     }
   }
@@ -1920,6 +1925,103 @@ class TagItterator{
   int8_t count[MAX_TAG_RECURSION];
   std::function< void(String&, String&) > callback;
   bool last_loop;
+};
+
+struct TagQueueEntry{
+  uint16_t id;
+  TagBase* tag;
+  unsigned long sent_at;
+};
+
+#define TAG_QUEUE_LEN 20
+
+class TaqQueue{
+ public:
+  TaqQueue() : id_counter(1) {
+    clear();
+  }
+
+  void clear(){
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      queue[i].id = 0;
+    }
+  }
+
+  void dequeue(TagBase* tag){
+    if(tag == nullptr){
+      return;
+    }
+
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      if(queue[i].tag != nullptr && tag->id == queue[i].tag->id){
+        Serial.print("TaqQueue::dequeue(");
+        Serial.print(tag->id);
+        Serial.println(")   (tag)");
+
+        queue[i].id = 0;
+      }
+    }
+  }
+
+  void dequeue(uint16_t id){
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      if(id == queue[i].id){
+        Serial.print("TaqQueue::dequeue(");
+        Serial.print(id);
+        Serial.println(")   (id)");
+
+        queue[i].id = 0;
+      }
+    }
+  }
+
+  bool push(TagBase* tag){
+    if(tag == nullptr){
+      return false;
+    }
+
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      if(queue[i].id == 0){
+        Serial.print("TaqQueue::push() ");
+        Serial.print(id_counter);
+        Serial.print(" ");
+        Serial.println(tag->getPath());
+
+        if(tag->id == 0){
+          tag->id = id_counter;
+          id_counter++;
+        }
+        queue[i].id = tag->id;
+        queue[i].tag = tag;
+        queue[i].sent_at = 0;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  TagBase* peek(){
+    //Serial.println("TaqQueue::peek()");
+
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      if(queue[i].id != 0 && (millis() - queue[i].sent_at > 5000)){
+        if(queue[i].id != queue[i].tag->id){
+          Serial.printf("NO MATCH: %i %i %i\n", queue[i].id, queue[i].tag->id, i);
+        }
+        queue[i].sent_at = millis();
+        Serial.print("TaqQueue::peek()  ");
+        Serial.print(queue[i].id);
+        Serial.print(" ");
+        Serial.println(queue[i].tag->getPath());
+        return queue[i].tag;
+      }
+    }
+    return nullptr;
+  }
+
+ private:
+  TagQueueEntry queue[TAG_QUEUE_LEN];
+  uint32_t id_counter;
 };
 
 #endif  // ESP8266__TAGS_H

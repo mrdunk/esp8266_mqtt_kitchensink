@@ -22,9 +22,12 @@
 #include <ArduinoJson.h>        // ArduinoJson library.
 #include "message_parsing.h"
 #include "ipv4_helpers.h"
+#include "tags.h"
 
 extern TagItterator tag_itterator;
 extern std::function< void(String&, String&) > tag_itterator_callback;
+extern TaqQueue tag_queue;
+
 
 void parse_tag_name(String& tag_name, String* name_list){
   uint8_t section_count = 0;
@@ -211,6 +214,7 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
     } else if(command == "learn_all"){
       tag_itterator.reset();
       tag_itterator_callback = callback;
+      tag_queue.clear();
     } else if(command == "update"){
       String path = valueFromStringPayload(payload, "path");
       String value = valueFromStringPayload(payload, "value");
@@ -219,8 +223,14 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
       tag->sendData(callback);
       config->save();  // TODO: Batch these so it does not happen every time.
       // TODO: Perform setup on IO if it's settings change.
-
     } else if(command == "learn"){
+    } else if(command == "ack"){
+      String incoming_id = valueFromStringPayload(payload, "id");
+      //Serial.printf("incoming_id: %s\n", incoming_id.c_str());
+      int incoming_id_num = incoming_id.toInt();
+      if(incoming_id == "0" || incoming_id_num > 0){
+        tag_queue.dequeue(incoming_id_num);
+      }
     }
   }
 

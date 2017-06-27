@@ -91,6 +91,8 @@ Io io;
 TagRoot root_tag(&config, &brokers, &my_mdns, &mqtt, &io);
 TagItterator tag_itterator(root_tag);
 std::function< void(String&, String&) > tag_itterator_callback = nullptr;
+TagBase* tag_to_process;
+TaqQueue tag_queue;
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
@@ -273,6 +275,8 @@ void setup(void) {
     }
 
     mqtt.registerCallback(mqttCallback);
+
+    tag_to_process = nullptr;
   }
   Serial.println("done setup");
 }
@@ -302,9 +306,20 @@ void loop(void) {
       mqtt.publish(topic, payload);
     }
 
-    TagBase* tag = tag_itterator.loop();
-    if(tag != nullptr){
-      tag->sendData(tag_itterator_callback);
+    if(tag_to_process == nullptr){
+      tag_to_process = tag_itterator.loop();
+    }
+    if(tag_to_process != nullptr){
+      if(tag_queue.push(tag_to_process)){
+        tag_to_process = nullptr;
+      }
+    }
+    TagBase* tag_to_send = tag_queue.peek();
+    if(tag_to_send != nullptr){
+      if(!tag_to_send->sendData(tag_itterator_callback)){
+        Serial.print("* ");
+        tag_queue.dequeue(tag_to_send);
+      }
     }
   }
 }

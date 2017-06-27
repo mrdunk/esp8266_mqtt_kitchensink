@@ -40,6 +40,7 @@ class WebSocket{
     websocket.onEvent(webSocketEvent);
   }
   void loop(){ websocket.loop(); }
+  bool status;
  private:
   WebSocketsServer websocket;
   Io* io;
