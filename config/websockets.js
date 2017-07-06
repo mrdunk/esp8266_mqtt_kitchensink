@@ -13,8 +13,8 @@ var ws_data = {};
 if(localStorage.esp8266_kitchensink === ""){
   localStorage.esp8266_kitchensink = "{}";
 } else {
-  //console.log(localStorage.esp8266_kitchensink);
-  //ws_data = JSON.parse(localStorage.esp8266_kitchensink);
+  console.log(localStorage.esp8266_kitchensink);
+  ws_data = JSON.parse(localStorage.esp8266_kitchensink);
 }
 
 function wsCodes(value){
@@ -229,6 +229,7 @@ function wsStart(){
         var message = {_command: "ack",
                        path : payload.name,
                        id: payload.id,
+                       sequence: payload.sequence,
                        _subject: "hosts/_all"};
         wsQueueSend(message);
       }

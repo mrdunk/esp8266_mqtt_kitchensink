@@ -93,6 +93,7 @@ TagItterator tag_itterator(root_tag);
 std::function< void(String&, String&) > tag_itterator_callback = nullptr;
 TagBase* tag_to_process;
 TaqQueue tag_queue;
+uint16_t TagBase::id_counter = 0;
 
 // Web page configuration interface.
 HttpServer http_server((char*)buffer, BUFFER_SIZE, &config, &brokers,
@@ -256,9 +257,9 @@ void setup(void) {
 
   config.load("/config.cfg");
     
-  setup_network();
 
   if(testPullFirmware()){
+    setup_network();
     Serial.println("Pull Firmware mode!!");
   } else {
     // Do IO setup early in case an IO pin needs to hold power to esp8266 on.
@@ -266,6 +267,8 @@ void setup(void) {
     attachInterrupt(digitalPinToInterrupt(config.enableiopin), configInterrupt, CHANGE);
     io.registerCallback([]() {io.inputCallback();});  // Inline callback function.
     io.setup();
+    
+    setup_network();
 
     if (strlen(config.hostname) == 0){
       uint8_t mac[6];
@@ -317,6 +320,7 @@ void loop(void) {
     TagBase* tag_to_send = tag_queue.peek();
     if(tag_to_send != nullptr){
       if(!tag_to_send->sendData(tag_itterator_callback)){
+        // Tag does not need sending so remove it from the queue now.
         Serial.print("* ");
         tag_queue.dequeue(tag_to_send);
       }

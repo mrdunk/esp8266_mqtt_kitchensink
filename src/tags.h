@@ -48,7 +48,10 @@
 class TagBase{
  public:
   TagBase(TagBase** _base_children, const uint8_t _children_len,
-          COMMON_DEF, const char* _name) : COMMON_ALLOCATE, name(_name) {}
+          COMMON_DEF, const char* _name) : COMMON_ALLOCATE, name(_name)
+  {
+    id = id_counter++;
+  }
 
   virtual bool contentsAt(uint8_t /*index*/, String& content, int& value){
     content = "";
@@ -107,7 +110,7 @@ class TagBase{
     int value;
     contentsAt(sequence, content, value);
 
-    if(content == "" && (parent == nullptr || parent->contentCount() == 0)){
+    if(content == ""){// && (parent == nullptr || parent->contentCount() == 0)){
       return false;
     }
     
@@ -116,7 +119,7 @@ class TagBase{
     }
 
     //DynamicJsonBuffer jsonBuffer;
-    StaticJsonBuffer<150> jsonBuffer;
+    StaticJsonBuffer<300> jsonBuffer;
     JsonObject& root = jsonBuffer.createObject();
     root["name"] = getPath();
     root["id"] = id;
@@ -152,6 +155,7 @@ class TagBase{
   uint8_t sequence;
   bool configurable;
   bool direct_value;
+  static uint16_t id_counter;
 };
 
 
@@ -1842,8 +1846,6 @@ class TagItterator{
         }
       }
     }
-    if(tag_pointer != nullptr){
-    }
     return tag_pointer;
   }
 
@@ -1917,6 +1919,7 @@ class TagItterator{
     if(p_depth != nullptr){
       *p_depth = depth;
     }
+
     return return_tag;
   }
 
@@ -1929,6 +1932,7 @@ class TagItterator{
 
 struct TagQueueEntry{
   uint16_t id;
+  uint8_t sequence;
   TagBase* tag;
   unsigned long sent_at;
 };
@@ -1937,7 +1941,7 @@ struct TagQueueEntry{
 
 class TaqQueue{
  public:
-  TaqQueue() : id_counter(1) {
+  TaqQueue() {
     clear();
   }
 
@@ -1953,7 +1957,7 @@ class TaqQueue{
     }
 
     for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
-      if(queue[i].tag != nullptr && tag->id == queue[i].tag->id){
+      if(tag == queue[i].tag){
         Serial.print("TaqQueue::dequeue(");
         Serial.print(tag->id);
         Serial.println(")   (tag)");
@@ -1963,12 +1967,16 @@ class TaqQueue{
     }
   }
 
-  void dequeue(uint16_t id){
+  void dequeue(uint16_t id, uint8_t sequence){
     for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
-      if(id == queue[i].id){
-        Serial.print("TaqQueue::dequeue(");
+      if(id == queue[i].id && sequence == queue[i].sequence){
+        Serial.print("TaqQueue::dequeue()");
+        Serial.print(i);
+        Serial.print(" ");
         Serial.print(id);
-        Serial.println(")   (id)");
+        Serial.print(" ");
+        Serial.print(queue[i].tag->getPath());
+        Serial.println("   (id)");
 
         queue[i].id = 0;
       }
@@ -1981,17 +1989,23 @@ class TaqQueue{
     }
 
     for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
+      if(queue[i].id == tag->id && queue[i].sequence == tag->sequence){
+        // Already in queue.
+        return true;
+      }
+    }
+
+    for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
       if(queue[i].id == 0){
         Serial.print("TaqQueue::push() ");
-        Serial.print(id_counter);
+        Serial.print(i);
+        Serial.print(" ");
+        Serial.print(tag->id);
         Serial.print(" ");
         Serial.println(tag->getPath());
 
-        if(tag->id == 0){
-          tag->id = id_counter;
-          id_counter++;
-        }
         queue[i].id = tag->id;
+        queue[i].sequence = tag->sequence;
         queue[i].tag = tag;
         queue[i].sent_at = 0;
         return true;
@@ -2004,15 +2018,18 @@ class TaqQueue{
     //Serial.println("TaqQueue::peek()");
 
     for(uint8_t i=0; i < TAG_QUEUE_LEN; i++){
-      if(queue[i].id != 0 && (millis() - queue[i].sent_at > 5000)){
+      if(queue[i].id != 0 && (millis() - queue[i].sent_at > 10000)){
         if(queue[i].id != queue[i].tag->id){
           Serial.printf("NO MATCH: %i %i %i\n", queue[i].id, queue[i].tag->id, i);
         }
         queue[i].sent_at = millis();
         Serial.print("TaqQueue::peek()  ");
+        Serial.print(i);
+        Serial.print(" ");
         Serial.print(queue[i].id);
         Serial.print(" ");
         Serial.println(queue[i].tag->getPath());
+        queue[i].tag->sequence = queue[i].sequence;
         return queue[i].tag;
       }
     }
@@ -2021,7 +2038,6 @@ class TaqQueue{
 
  private:
   TagQueueEntry queue[TAG_QUEUE_LEN];
-  uint32_t id_counter;
 };
 
 #endif  // ESP8266__TAGS_H

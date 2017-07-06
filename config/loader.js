@@ -322,7 +322,7 @@ var Loader =
       exact_path += path[i];
       exact_path += '.';
       if(data_pointer === undefined || data_pointer[path[i]] === undefined){
-        if(exact_path.endsWith('_path.')){
+        if(exact_path.endsWith('_path.') && exact_path.split('_path.').length > 1){
           return exact_path.split('_path.')[0];
         }
         return "(XXXX)";

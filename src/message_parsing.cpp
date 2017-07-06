@@ -226,10 +226,12 @@ void actOnMessage(Io* io, Config* config, String& topic, const String& payload,
     } else if(command == "learn"){
     } else if(command == "ack"){
       String incoming_id = valueFromStringPayload(payload, "id");
+      String incoming_sequence = valueFromStringPayload(payload, "sequence");
       //Serial.printf("incoming_id: %s\n", incoming_id.c_str());
-      int incoming_id_num = incoming_id.toInt();
+      uint16_t incoming_id_num = incoming_id.toInt();
+      uint8_t incoming_sequence_num = incoming_sequence.toInt();
       if(incoming_id == "0" || incoming_id_num > 0){
-        tag_queue.dequeue(incoming_id_num);
+        tag_queue.dequeue(incoming_id_num, incoming_sequence_num);
       }
     }
   }
